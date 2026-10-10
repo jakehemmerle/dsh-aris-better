@@ -16,7 +16,8 @@ function resolverFor(table) {
 const ALL_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
 const JAKE = resolverFor({
   'openai-codex/gpt-6-astra': ALL_EFFORTS,
-  'providerproxy/gpt-6-astra': ALL_EFFORTS,
+  'openai-codex/gpt-6.1-sol': ALL_EFFORTS,
+  'providerproxy/gpt-6.1-sol': ALL_EFFORTS,
   'anthropic/claude-opus-5-5': ALL_EFFORTS,
   'providerproxy/claude-opus-5-5': ALL_EFFORTS,
 })
@@ -38,7 +39,7 @@ test('effort ladder never drops below the requested tier', () => {
   assert.deepEqual(effortCandidates('high'), ['high', 'xhigh', 'max'])
 })
 
-test('Claude executor gets the pinned GPT reviewer at the pinned tier', async () => {
+test('a skill pin outside the configured routes is not used: Claude executor gets gpt-6.1-sol at the pinned tier', async () => {
   const selection = await selectReviewerRoute({
     executor: { provider: 'anthropic', model: 'claude-opus-5-5' },
     requestedModel: 'gpt-6-astra',
@@ -46,8 +47,20 @@ test('Claude executor gets the pinned GPT reviewer at the pinned tier', async ()
     routes: DEFAULT_ROUTES,
     resolve: JAKE,
   })
-  assert.deepEqual(selection.route, { provider: 'openai-codex', model: 'gpt-6-astra', reasoningEffort: 'max', maxTokens: 128000 })
+  assert.deepEqual(selection.route, { provider: 'openai-codex', model: 'gpt-6.1-sol', reasoningEffort: 'max', maxTokens: 128000 })
   assert.equal(selection.independence, 'verified-by-host-routing')
+  assert.equal(selection.requestedModelHonored, false)
+})
+
+test('a skill pin matching a configured route is tried first', async () => {
+  const selection = await selectReviewerRoute({
+    executor: { provider: 'anthropic', model: 'claude-opus-5-5' },
+    requestedModel: 'gpt-6-astra',
+    requestedEffort: 'xhigh',
+    routes: [{ provider: 'openai-codex', model: 'gpt-6.1-sol' }, { provider: 'openai-codex', model: 'gpt-6-astra' }],
+    resolve: JAKE,
+  })
+  assert.equal(selection.route.model, 'gpt-6-astra')
   assert.equal(selection.requestedModelHonored, true)
 })
 
@@ -72,10 +85,10 @@ test('an unavailable route falls through to the next cross-family route', async 
     requestedModel: 'gpt-6-astra',
     requestedEffort: 'xhigh',
     routes: DEFAULT_ROUTES,
-    resolve: resolverFor({ 'providerproxy/gpt-6-astra': ALL_EFFORTS }),
+    resolve: resolverFor({ 'providerproxy/gpt-6.1-sol': ALL_EFFORTS }),
   })
   assert.equal(selection.route.provider, 'providerproxy')
-  assert.equal(selection.route.model, 'gpt-6-astra')
+  assert.equal(selection.route.model, 'gpt-6.1-sol')
 })
 
 test('a route that only supports efforts below the floor is not used', async () => {
@@ -118,5 +131,5 @@ test('an executor of unknown family is reviewed but marked unverified', async ()
     resolve: JAKE,
   })
   assert.equal(selection.independence, 'unverified')
-  assert.equal(selection.route.model, 'gpt-6-astra')
+  assert.equal(selection.route.model, 'gpt-6.1-sol')
 })

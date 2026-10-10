@@ -65,7 +65,10 @@ export class ReviewUnavailableError extends Error {
 }
 
 /**
- * Ordered, de-duplicated candidate routes for one review.
+ * Ordered, de-duplicated candidate routes for one review. The configured
+ * routes are the complete set of reviewer models: a skill's pinned model
+ * (most pin `gpt-6-astra`) only moves its matching routes to the front, so
+ * changing the routes changes the reviewer without editing any skill.
  * @param {object} input
  * @param {string} input.executorFamily
  * @param {string | undefined} input.requestedModel - the skill's pinned reviewer model.
@@ -75,26 +78,24 @@ export class ReviewUnavailableError extends Error {
 export function candidateRoutes({ executorFamily, requestedModel, routes }) {
   const candidates = []
   const skipped = []
+  const requested = route => route.model === requestedModel
+  const ordered = [...routes.filter(requested), ...routes.filter(route => !requested(route))]
   const seen = new Set()
-  const add = (provider, model, requested) => {
+  for (const { provider, model } of ordered) {
     const key = `${provider}/${model}`
-    if (seen.has(key)) return
+    if (seen.has(key)) continue
     seen.add(key)
     const family = modelFamily(model)
     if (family === 'unknown') {
       skipped.push(`${key}: model family unknown, independence cannot be checked`)
-      return
+      continue
     }
     if (executorFamily !== 'unknown' && family === executorFamily) {
       skipped.push(`${key}: same family as the executor (${family})`)
-      return
+      continue
     }
-    candidates.push({ provider, model, family, requested })
+    candidates.push({ provider, model, family, requested: model === requestedModel })
   }
-  if (typeof requestedModel === 'string' && requestedModel !== '') {
-    for (const provider of new Set(routes.map(route => route.provider))) add(provider, requestedModel, true)
-  }
-  for (const route of routes) add(route.provider, route.model, false)
   return { candidates, skipped }
 }
 

@@ -98,15 +98,15 @@ Each call starts a `spawn` subagent (`delivery: 'caller'`; its tool allow-list o
 
 **Route selection** (pure, `routing.mjs`):
 1. Executor = the calling agent's resolved route (`parentAgentOptionsForDelegation`). Family from the model id (port of `tools/review_gate.py:derive_model_family`).
-2. If the skill pinned `model` and its family differs from the executor's, try it on each configured reviewer provider in order.
-3. Otherwise (or if the pin is same-family / unresolvable) take the first configured reviewer route whose family differs from the executor's.
+2. The configured reviewer routes are the only reviewer models. If the skill pinned `model` (most pin `gpt-6-astra`), routes serving exactly that model are tried first; a pin no route serves is ignored.
+3. Take the first route whose family differs from the executor's.
 4. A route is usable only if `llm.resolveCallConfig` accepts it with an effort at or above the requested tier (ladder: `ultra`→`max`,`xhigh`; `xhigh`→`xhigh`,`max`; `high`→`high`,`xhigh`,`max`; …). Never below `xhigh` for an `xhigh`/`ultra` request.
 5. No usable cross-family route → tool error `REVIEW_UNAVAILABLE` with the reason. No same-family fallback. An unknown executor family is allowed but labelled `independence=unverified`.
 
 Default reviewer routes (override with `aris-host` `config.reviewer.routes`):
 
 ```
-openai-codex/gpt-6-astra, providerproxy/gpt-6-astra,
+openai-codex/gpt-6.1-sol, providerproxy/gpt-6.1-sol,
 anthropic/claude-opus-5-5, providerproxy/claude-opus-5-5,
 deepseek-official/deepseek-v4-pro
 ```
@@ -121,7 +121,7 @@ the same replay model as `codex exec resume`.
 reviewer's answer:
 
 ```
-ARIS reviewer metadata (not part of the reviewer response): threadId=… reviewer=openai-codex/gpt-6-astra effort=xhigh reviewer_family=openai executor=anthropic/claude-opus-5-5 executor_family=anthropic independence=verified-by-host-routing
+ARIS reviewer metadata (not part of the reviewer response): threadId=… reviewer=openai-codex/gpt-6.1-sol effort=xhigh reviewer_family=openai executor=anthropic/claude-opus-5-5 executor_family=anthropic independence=verified-by-host-routing
 ```
 
 Skills record `reported_reviewer_model` and families from that line, so

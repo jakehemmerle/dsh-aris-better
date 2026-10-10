@@ -10,10 +10,14 @@
 
 import { defaultThreadDir } from './threads.mjs'
 
-/** Reviewer routes in preference order; the first cross-family one that resolves wins. */
+/**
+ * Reviewer routes in preference order; the first cross-family one that resolves wins.
+ * These are the only reviewer models: a skill's `gpt-6-astra` pin is not a route here,
+ * so GPT reviews run on gpt-6.1-sol.
+ */
 export const DEFAULT_ROUTES = Object.freeze([
-  { provider: 'openai-codex', model: 'gpt-6-astra' },
-  { provider: 'providerproxy', model: 'gpt-6-astra' },
+  { provider: 'openai-codex', model: 'gpt-6.1-sol' },
+  { provider: 'providerproxy', model: 'gpt-6.1-sol' },
   { provider: 'anthropic', model: 'claude-opus-5-5' },
   { provider: 'providerproxy', model: 'claude-opus-5-5' },
   { provider: 'deepseek-official', model: 'deepseek-v4-pro' },

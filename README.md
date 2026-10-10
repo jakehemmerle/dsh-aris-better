@@ -36,14 +36,14 @@ dsh --profile web --dump-config | grep -nE 'aris-host|preset-aris'
 Route selection:
 
 1. The executor is the calling session's live model; its family comes from the model id (so one gateway serving both Claude and GPT is handled).
-2. A pinned `model` (most skills pin `gpt-6-astra`) is used if it is a different family and some configured provider serves it.
-3. Otherwise the first configured reviewer route of a different family wins. Defaults, in order: `openai-codex/gpt-6-astra`, `providerproxy/gpt-6-astra`, `anthropic/claude-opus-5-5`, `providerproxy/claude-opus-5-5`, `deepseek-official/deepseek-v4-pro`.
+2. The configured reviewer routes are the only reviewer models. A skill's pinned `model` (most pin `gpt-6-astra`) only moves a route serving that exact model to the front.
+3. The first route of a different family that resolves wins. Defaults, in order: `openai-codex/gpt-6.1-sol`, `providerproxy/gpt-6.1-sol`, `anthropic/claude-opus-5-5`, `providerproxy/claude-opus-5-5`, `deepseek-official/deepseek-v4-pro`. So GPT reviews run on GPT-6.1 Sol, not Astra.
 4. Effort never drops below the requested tier: `ultra` → `max` then `xhigh`; `xhigh` → `xhigh` then `max`.
 
 Every result starts with one line the skills record into `REVIEW_STATE.json`:
 
 ```
-ARIS reviewer metadata (not part of the reviewer response): threadId=aris-rv-… round=1 reviewer=openai-codex/gpt-6-astra effort=xhigh reviewer_family=openai executor=anthropic/claude-opus-5-5 executor_family=anthropic independence=verified-by-host-routing requested_model=gpt-6-astra requested_model_used=yes
+ARIS reviewer metadata (not part of the reviewer response): threadId=aris-rv-… round=1 reviewer=openai-codex/gpt-6.1-sol effort=xhigh reviewer_family=openai executor=anthropic/claude-opus-5-5 executor_family=anthropic independence=verified-by-host-routing requested_model=gpt-6-astra requested_model_used=no
 ```
 
 The reviewer gets `read`, `read_image`, `glob`, `grep`, `web_search`, `web_fetch` and `skill`; `sandbox: workspace-write` adds `bash`/`write`/`edit`. It cannot delegate or call the reviewer tools. Threads persist in `$DSH_HOME/aris/reviewer-threads/` and survive restarts.

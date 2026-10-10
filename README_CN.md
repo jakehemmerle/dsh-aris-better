@@ -21,8 +21,8 @@ dsh plugin --profile web add link:/本仓库的绝对路径   # 或打包后的 
 ## 审稿路由
 
 1. 执行者 = 当前会话的实际模型，家族由模型 id 判断（同一网关同时提供 Claude 与 GPT 也能区分）。
-2. 技能固定的 `model`（多数为 `gpt-6-astra`）仅在其家族不同且有 provider 提供时使用。
-3. 否则使用第一个家族不同的已配置路由。默认顺序：`openai-codex/gpt-6-astra`、`providerproxy/gpt-6-astra`、`anthropic/claude-opus-5-5`、`providerproxy/claude-opus-5-5`、`deepseek-official/deepseek-v4-pro`。
+2. 已配置的审稿路由是唯一的审稿模型。技能固定的 `model`（多数为 `gpt-6-astra`）只会把提供该模型的路由排到最前。
+3. 使用第一个家族不同且可用的路由。默认顺序：`openai-codex/gpt-6.1-sol`、`providerproxy/gpt-6.1-sol`、`anthropic/claude-opus-5-5`、`providerproxy/claude-opus-5-5`、`deepseek-official/deepseek-v4-pro`。因此 GPT 审稿使用 GPT-6.1 Sol，而不是 Astra。
 4. 推理强度不低于请求档位：`ultra` → `max`，再 `xhigh`；`xhigh` → `xhigh`，再 `max`。
 
 每次结果首行是元数据（threadId、实际审稿模型与家族、执行者模型与家族、独立性），技能会把它写入 `REVIEW_STATE.json`。审稿线程保存在 `$DSH_HOME/aris/reviewer-threads/`，重启后可继续。
