@@ -176,7 +176,6 @@ export function registerRunStatus(ctx) {
           },
         }
       },
-      { authority: 'loopback' },
     ), 'ARIS run-status RPC')
   })
 }

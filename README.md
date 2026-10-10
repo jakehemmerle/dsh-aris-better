@@ -1,107 +1,90 @@
-# ARIS on DeepSeek Harness
+# ARIS mode for DeepSeek Harness 0.2
 
-English | [中文](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/dsh-aris/README_CN.md)
+English | [中文](README_CN.md)
 
-> The `dsh-aris` distribution branch. The full ARIS project — every workflow, the docs, and the other host adaptations — lives on [`main`](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep).
+> A fork of the upstream [`dsh-aris`](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/tree/dsh-aris) branch for DeepSeek Harness (dsh) 0.2.x. The full ARIS project — every workflow, the docs, and the other host adaptations — lives on upstream [`main`](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep). Design and rationale: [`dsh/SPEC.md`](dsh/SPEC.md).
 
-❗ **Updated codex-cli to 0.154 or later?** Get `dsh-aris` 0.1.1: `dsh plugin --profile web add dsh-aris@latest`, then restart the profile. 0.154 removed `codex mcp-server`, which 0.1.0 spawned, so that profile no longer starts. 0.1.1 ships ARIS's own bridge instead; it works on 0.153 too.
+ARIS runs as its own **agent preset**. Pick **ARIS** in the preset picker next to Standard and PTC, and that session gets all 84 ARIS skills plus an independent reviewer. Other presets, and your default model, are untouched.
 
-Runs the ARIS research workflow inside [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): all 83 skills in the native skill catalog, with cross-model adversarial review through Codex.
+The reviewer runs **inside dsh** as a subagent, on the providers your profile already has (anthropic, openai-codex, providerproxy, deepseek-official, any custom route). It is always from a **different model family** than the session's model — a Claude session is reviewed by GPT, a GPT session by Claude. If no such route is available the review fails with `REVIEW_UNAVAILABLE`; it never falls back to self-review. No Codex CLI, Python bridge, or extra login is needed.
 
-The skills are unmodified. This bundle is one configuration layer plus a short adapter — it patches no Harness code and forks nothing.
+The skills are unmodified upstream `main` (`26b95cf`, 2026-10-07). They keep calling `mcp__codex__codex` / `mcp__codex__codex-reply`; this package serves those tool names from dsh.
 
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-aris
+dsh plugin --profile web add link:/absolute/path/to/this/checkout   # or a packed tarball
 ```
 
-Restart the profile afterwards; plugin code loads at startup, so reloading the page is not enough.
+Restart dsh (`dsh web`, or your service) — plugin code loads at startup. Then open a new session, choose **ARIS** in the preset picker before the first message, and type `/` to see the ARIS skills.
 
-`dsh plugin` shells out to **pnpm**, which the Harness does not bundle. Without it on `PATH` the install exits before doing anything.
+`dsh plugin` shells out to **pnpm**, which dsh does not bundle.
 
-The command resolves the package from the npm registry. Without npm access, install the same tarball from the [GitHub Release](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/releases/tag/dsh-aris-v0.1.1) instead — pinned to this version, and `dsh plugin update` does not apply to it:
+Check the layer applied:
 
 ```sh
-dsh plugin --profile web add https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/releases/download/dsh-aris-v0.1.1/dsh-aris-0.1.1.tgz
+dsh --profile web --dump-config | grep -nE 'aris-host|preset-aris'
 ```
 
-## Prerequisites
+## How the reviewer works
 
-**Codex CLI, installed and authenticated.** It is the independent reviewer. The bundle reaches it through ARIS's own bridge, `mcp-servers/codex-exec/server.py` (shipped in the package), which runs each call as `codex exec`: codex-cli 0.154 removed `codex mcp-server`, verified on codex-cli 0.153.4 and 0.154.0. Nothing here overrides the model or reasoning effort. A call that names neither uses `~/.codex/config.toml`; a skill that names them pins them for the whole thread. **`~/.codex/config.toml` is the reviewer posture contract**. ARIS expects a non-DeepSeek family at `xhigh`:
+| Skill call | What runs |
+|---|---|
+| `mcp__codex__codex {prompt, model, config.model_reasoning_effort, sandbox, cwd}` | Picks a reviewer route, starts a dsh child session on it, returns its answer. |
+| `mcp__codex__codex-reply {threadId, prompt}` | Same route/effort/sandbox; the child sees every earlier round of the thread. |
 
-```toml
-model = "gpt-6-astra"
-model_reasoning_effort = "xhigh"
+Route selection:
+
+1. The executor is the calling session's live model; its family comes from the model id (so one gateway serving both Claude and GPT is handled).
+2. A pinned `model` (most skills pin `gpt-6-astra`) is used if it is a different family and some configured provider serves it.
+3. Otherwise the first configured reviewer route of a different family wins. Defaults, in order: `openai-codex/gpt-6-astra`, `providerproxy/gpt-6-astra`, `anthropic/claude-opus-5-5`, `providerproxy/claude-opus-5-5`, `deepseek-official/deepseek-v4-pro`.
+4. Effort never drops below the requested tier: `ultra` → `max` then `xhigh`; `xhigh` → `xhigh` then `max`.
+
+Every result starts with one line the skills record into `REVIEW_STATE.json`:
+
+```
+ARIS reviewer metadata (not part of the reviewer response): threadId=aris-rv-… round=1 reviewer=openai-codex/gpt-6-astra effort=xhigh reviewer_family=openai executor=anthropic/claude-opus-5-5 executor_family=anthropic independence=verified-by-host-routing requested_model=gpt-6-astra requested_model_used=yes
 ```
 
-If the bridge cannot start — no `python3` — the Harness fails to boot rather than running a composition with no reviewer. That is deliberate: ARIS without an independent reviewer is not ARIS. A Codex that is missing or logged out surfaces later, on the first reviewer call, as an error result carrying Codex's own message.
+The reviewer gets `read`, `read_image`, `glob`, `grep`, `web_search`, `web_fetch` and `skill`; `sandbox: workspace-write` adds `bash`/`write`/`edit`. It cannot delegate or call the reviewer tools. Threads persist in `$DSH_HOME/aris/reviewer-threads/` and survive restarts.
 
-**Python 3.9 or newer on `PATH` as `python3`**, for the bridge. macOS's system Python qualifies; no packages are installed.
+Override the routes (and `timeoutMs`, default 20 minutes) on the host row in your profile patch. dsh patches cannot address rows nested inside a preset, so the knobs live on `aris-host`:
 
-**A DeepSeek API key**, through the Harness Models page or `DEEPSEEK_API_KEY`.
-
-**Behind an HTTP proxy**, start the Harness with `NODE_USE_ENV_PROXY=1`. Node's fetch ignores `http_proxy` otherwise, and model requests fail with `TRANSPORT`. It must be set when Node starts; configuration cannot repair an already-started process.
-
-**Optional — bound the executor too.** ARIS's reviewers already carry scope limits: the block that forbids proposing hashes, defensive scaffolding, corner-case hardening, and over-mechanized judgement is embedded in the skills that produce review prompts, and applies with no setup. Nothing bounds the *executor* the same way. Two ways to close that, and they are different things:
-
-- **ARIS's own limits, one flag.** The `aris-scope-limits` row ships disabled; set `disabled: false` in your profile's patch to apply the same block to the executor. It reads the packaged `skills/shared-references/review-scope-limits.md` at load, so the reviewer path and the executor path cannot drift apart. Off by default because it spends tokens on every request.
-- **The full [HERO](https://github.com/wanshuiyin/HERO-Anti-OverDefense) contract.** Paste its canonical block into the project's `AGENTS.md` or `CLAUDE.md`, or into `$DSH_HOME/AGENTS.md` for every dsh project — the Harness loads those files itself. This bundle does not vendor HERO's text; its canonical home is HERO's own `RULES.md`.
-
-## Verify
-
-```sh
-dsh --profile web --dump-config | grep -A2 aris-
+```yaml
+- id: aris-host
+  config:
+    reviewer:
+      routes:
+        - { provider: openai-codex, model: gpt-6.1-sol }
+        - { provider: anthropic, model: claude-opus-5-5 }
 ```
 
-Then, in a session, type `/` — the skill menu lists the ARIS skills. To check the part that matters, ask the model to call `mcp__codex__codex` with a trivial prompt, report the `threadId` it can see, then continue that thread once with `mcp__codex__codex-reply`. A visible `threadId` is what makes multi-round review work. The bridge keeps one record per thread under `~/.codex/state/codex-exec/threads/`, so a thread continues after a Harness restart.
+## Optional rows (disabled)
+
+| Row | Enable when |
+|---|---|
+| `aris-scope-limits` | You want the reviewer's scope limits applied to the executor too (costs tokens every request). |
+| `aris-grok` | The `grok` CLI is installed: adds `grok` / `grok-reply` consultation tools (upstream #454). |
+| `aris-antigravity` | The `agy` CLI is installed: adds `antigravity` / `antigravity-reply`. |
+
+These consultation bridges are not reviewer routes and never satisfy an acceptance gate.
 
 ## The ARIS tab
 
-In the Web UI a session gains an **ARIS** tab beside Chat and Trajectory. It is
-read-only: it shows what the reviewer and the loop's own artifacts say, and
-never writes, advances a round, or turns a score into a completion decision.
+Sessions get a read-only **ARIS** tab beside Chat and Trajectory. It reads `review-stage/REVIEW_STATE.json` from the session's workspace and shows who reviewed the latest round and whether the families differ. It never writes, advances a round, or turns a score into a completion decision.
 
-It reads `review-stage/REVIEW_STATE.json` from the session's workspace, so it
-stays empty until an `auto-review-loop` run finishes a round there.
-
-The top section is the reason the tab exists: **who reviewed this round**, and
-whether ARIS could verify that the reviewer belongs to a different model family
-than the executor. On the Codex backend that verification is `unverified` by
-design — Codex reports its own model, but nothing independently attests the
-executor's, so ARIS records `identity_assurance: caller_declared`. Read it as
-"route-consistent, not attested".
-
-Two honest limits are shown in the tab and worth repeating: state is written
-when a round finishes, not continuously, so a long round displays the previous
-one; and `completed` means the loop ended — a positive assessment *or* the round
-cap — never that the work was acquitted.
-
-## What the layer changes
-
-| Row | Effect |
-|---|---|
-| `agent-default-model` | executor becomes `deepseek-v4-pro` |
-| `aris-skills` | mounts the 83-skill corpus, publishes `ARIS_REPO`, restores Codex's `threadId`, serves the ARIS tab |
-| `aris-codex` | the codex-exec bridge as the `codex` MCP server, 20-minute call budget, pinned to a stable working directory; threads resume across Harness restarts |
-
-The corpus mounts at the bundled rank, so a project or user skill of the same name wins. The executor default is a deployment default, not a lock: a saved model setting or a per-session choice overrides it.
-
-## Developing against a checkout
+## Tests
 
 ```sh
-ARIS_REPO=/absolute/path/to/aris NODE_USE_ENV_PROXY=1 \
-  dsh --profile web --patch /absolute/path/to/aris/dsh/checkout.patch.yml
+DSH_ROOT=<prefix>/lib/node_modules/@deepseek-ai/dsh npm test
 ```
 
-Skill edits take effect without a restart. `ARIS_REPO` is required; without it the load fails naming the variable.
-
-This overlay is **not** equivalent to the installed bundle: it cannot restore Codex's `threadId`, so multi-round `codex-reply` — and therefore the hard-tier Debate Protocol — works only through the installed bundle. The two are mutually exclusive: applying the overlay to a profile that already has the bundle fails on a duplicate row id. Remove one.
+`preset-drift.test.mjs` compares the preset's copied Standard rows against the installed dsh; run it after every dsh upgrade.
 
 ## Known limits
 
-- **Tracks one Harness release.** DeepSeek Harness is a developer preview; this bundle is verified against `0.1.1-rc.1`. Every surface it uses survived rc.5 → 0.1.1-rc.1 unchanged, but that is not a promise about the next one.
-- **No dsh packages are declared as npm dependencies.** In-box packages are host-provided and resolve from the Harness installation through the profile module fallback. The Harness's own rule keeps `@deepseek-ai/dsh-*` out of `dependencies`, and the packages version in lockstep with the CLI, so any range this bundle pinned would fight the version the user already has installed.
-- **`web_fetch` is off.** Stock dsh ships it disabled and this bundle does not enable it, which would mean depending on a provider package. Skills that reach the web use `web_search`, or `bash` with `curl`.
-- **Codex's own reasoning is not in the Harness log.** Only the verdict returns. The call arguments and the verdict are logged; the reviewer's intermediate work stays on the Codex side.
-- **A verdict over 50 KB is spilled** to a file with a preview left in context. Raise `maxInlineBytes` on the `spill-policy` row if your reviews run longer.
+- **Tracks one dsh line.** Verified on dsh `0.2.1-alpha.2`. Presets were redesigned in 2026-09; re-run the tests on every upgrade.
+- **Web only.** dsh presets are a Web-surface concept; the headless and TUI profiles do not show ARIS mode.
+- **No per-preset model.** ARIS mode uses the session's model; dsh 0.2.1 has no preset-level default.
+- **Replay cost.** Each reply round resends the thread's earlier rounds to a fresh reviewer child.
+- **Do not also install the upstream Codex MCP server** in this preset: it registers the same tool names.

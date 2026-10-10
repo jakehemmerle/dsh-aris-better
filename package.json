@@ -1,7 +1,7 @@
 {
-  "name": "dsh-aris",
-  "version": "0.1.1",
-  "description": "ARIS research-workflow skills as a DeepSeek Harness bundle: 83 skills plus cross-model adversarial review through Codex.",
+  "name": "@jakehemmerle/dsh-aris",
+  "version": "0.2.0-alpha.1",
+  "description": "ARIS research workflow as a DeepSeek Harness agent preset: 84 skills plus an in-harness reviewer from a different model family.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -9,9 +9,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep.git"
+    "url": "git+https://github.com/jakehemmerle/Auto-claude-code-research-in-sleep.git"
   },
-  "homepage": "https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/tree/dsh-aris#readme",
+  "homepage": "https://github.com/jakehemmerle/Auto-claude-code-research-in-sleep/tree/dsh-next#readme",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
@@ -22,14 +22,18 @@
   "exports": {
     ".": "./dsh/index.mjs",
     "./client": "./dsh/client.js",
+    "./skills": "./dsh/skills.mjs",
+    "./reviewer": "./dsh/reviewer.mjs",
     "./scope-limits": "./dsh/scope-limits.mjs",
-    "./codex": "./dsh/codex.mjs",
+    "./bridge": "./dsh/bridge.mjs",
     "./cordis.patch.yml": "./dsh/cordis.patch.yml",
-    "./checkout.patch.yml": "./dsh/checkout.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "dsh",
+    "dsh/*.mjs",
+    "dsh/client.js",
+    "dsh/cordis.patch.yml",
+    "dsh/SPEC.md",
     "skills",
     "tools",
     "templates",
@@ -38,8 +42,8 @@
     "README_CN.md",
     "LICENSE"
   ],
-  "publishConfig": {
-    "access": "public"
+  "scripts": {
+    "test": "node --test 'dsh/test/*.test.mjs'"
   },
   "dsh": {
     "bundle": {

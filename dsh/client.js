@@ -10,7 +10,7 @@
 // normal source-and-build setup instead of growing here.
 
 window.__ModuleLoader__.load({
-  id: 'dsh-aris',
+  id: '@jakehemmerle/dsh-aris',
   factory(require) {
     const React = require('react')
     const h = React.createElement
