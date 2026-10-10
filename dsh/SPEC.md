@@ -1,6 +1,7 @@
-# dsh-aris-next: fork proposal and product spec
+# dsh-aris-better: fork proposal and product spec
 
-Status: proposal + reference implementation on branch `dsh-next` of a fork of
+Status: proposal + reference implementation on branch `dsh-next` of
+[`jakehemmerle/dsh-aris-better`](https://github.com/jakehemmerle/dsh-aris-better), a fork of
 `wanshuiyin/Auto-claude-code-research-in-sleep`.
 Target: DeepSeek Harness (dsh) `0.2.1-alpha.2` (and the `0.2.x` line).
 

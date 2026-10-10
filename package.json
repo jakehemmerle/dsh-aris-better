@@ -9,9 +9,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jakehemmerle/Auto-claude-code-research-in-sleep.git"
+    "url": "git+https://github.com/jakehemmerle/dsh-aris-better.git"
   },
-  "homepage": "https://github.com/jakehemmerle/Auto-claude-code-research-in-sleep/tree/dsh-next#readme",
+  "homepage": "https://github.com/jakehemmerle/dsh-aris-better/tree/dsh-next#readme",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
