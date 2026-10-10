@@ -25,7 +25,9 @@ complete workflows but records `review_independence: same-family` and
 verifiers may record accepted; never describe base Codex self-review as
 cross-model acceptance.
 
-**Full catalog**: [`docs/SKILLS_CATALOG.md`](docs/SKILLS_CATALOG.md) — **83 skills**, grouped by role.
+**Full catalog**: [`docs/SKILLS_CATALOG.md`](docs/SKILLS_CATALOG.md) — **84 skills**, grouped by role.
+
+Use [`/lean-formalize`](skills/lean-formalize/SKILL.md) when the user requests Lean work or a substantial mathematical obligation benefits from formal verification. It preserves the original statement, connects the proof, and checks the final declaration and its axioms; ordinary mathematical drafting continues to use `/proof-writer`.
 
 Invocation syntax is identical across hosts:
 ```
@@ -33,6 +35,8 @@ Invocation syntax is identical across hosts:
 ```
 
 **The `codex` MCP server is ARIS's own.** codex-cli 0.154.0 removed `codex mcp-server`; `mcp__codex__codex` / `mcp__codex__codex-reply` are served by [`mcp-servers/codex-exec/server.py`](mcp-servers/codex-exec/README.md), a zero-dependency bridge over `codex exec` with the identical tool contract. Registration: `claude mcp add codex -s user -- python3 <aris-repo>/mcp-servers/codex-exec/server.py` (other MCP hosts: same `codex` key, command `python3` + that path). Never register `codex mcp-server`. A `codex-reply` keeps the model, effort, sandbox and cwd its thread was created with — do not re-send them.
+
+**Optional CLI consultation tools.** When the user asks to consult Grok or Gemini through Antigravity, use the separately registered [`grok-exec`](mcp-servers/grok-exec/README.md) (`grok` / `grok-reply`, default `grok-4.7` + `xhigh`) or [`antigravity-exec`](mcp-servers/antigravity-exec/README.md) (`antigravity` / `antigravity-reply`, default `gemini-3.8-flash-high` + `high`). Pass an explicit `cwd` on the first call; continue with that service's saved `threadId` and `prompt`. These are optional direct tools, not new `— reviewer:` values: existing skill routes and acceptance rules remain in effect. In particular, `— reviewer: agy` still uses `gemini-review`, and the Codex Gemini overlay still uses its `review*` tools.
 
 ## Common Parameters
 

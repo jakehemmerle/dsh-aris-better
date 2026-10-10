@@ -38,7 +38,7 @@ When Codex MCP is the active backend (default for all non-auto-review-loop skill
 
 **Always pin BOTH `model` and `config.model_reasoning_effort` explicitly in the first call of every thread.** Do not rely on the user's `~/.codex/config.toml`: the catalog default effort for gpt-6-astra is `low`, far below the review floor.
 
-`ultra` = deepest reasoning + automatic task delegation — right for one-shot verdict-bearing audits, wrong for per-item loops (slower, pricier). Effort enums accepted by codex-cli ≥ 0.144.1: `none / minimal / low / medium / high / xhigh / max / ultra`.
+`ultra` = deepest reasoning + automatic task delegation — right for one-shot verdict-bearing audits, wrong for per-item loops (slower, pricier). Effort enums accepted by codex-cli ≥ 0.144.1: `none / minimal / low / medium / high / xhigh / max / ultra`. `max` and `ultra` both sit above `xhigh`; ARIS uses `ultra` for the deep-audit tier and does not use `max`.
 
 > **Do not confuse the two "max"es.** ARIS's `— effort: lite|balanced|max|beast` ([effort-contract.md](effort-contract.md)) sets how much WORK the pipeline does; Codex's `model_reasoning_effort: …|max|ultra` sets how hard the REVIEWER thinks. `— effort: max` does NOT imply `model_reasoning_effort: max`.
 
@@ -265,6 +265,12 @@ If Oracle is not installed, `— reviewer: oracle-pro` gracefully falls back to 
 
 Oracle MCP is maintained at [`steipete/oracle`](https://github.com/steipete/oracle). When you invoke `— reviewer: oracle-pro` (and especially the `o3-deep-research` / `gpt-5.5-pro` paths), it's worth checking the **[open PRs](https://github.com/steipete/oracle/pulls)** for in-flight fixes that may affect your run — e.g., model routing changes, browser-mode auth fixes, rate-limit handling, or new model alias support. ARIS does not vendor Oracle MCP; you're running the published version from `npm install -g @steipete/oracle`. If a behavior surprises you, the upstream PR queue is the first place to check before opening an issue here.
 
+## Optional direct Grok / Antigravity consultation
+
+When explicitly requested by the user, separately registered Grok or Antigravity MCP tools can read files and discuss a question: `grok` / `grok-reply` (default `grok-4.7` + `xhigh`) and `antigravity` / `antigravity-reply` (default `gemini-3.8-flash-high` + `high`). Pass `prompt` and an explicit `cwd` on the first call; use that service's saved `threadId` and `prompt` for follow-ups. See [grok-exec](../../mcp-servers/grok-exec/README.md) and [antigravity-exec](../../mcp-servers/antigravity-exec/README.md) for installation and tool contracts.
+
+These are direct consultation tools, not additional `— reviewer:` values. Installing them does not replace a skill's reviewer calls or satisfy its acceptance gate automatically. The existing mainline `— reviewer: agy` route remains `gemini-review`; the Codex base retains `spawn_agent` / `send_input`, and the Gemini overlay retains `review*`. Follow each skill's current reviewer contract for formal reviews.
+
 ## Optional: Gemini via Antigravity CLI (`— reviewer: agy`)
 
 When the user explicitly passes `— reviewer: agy`, route the review through the **gemini-review MCP** with the Antigravity (`agy`) backend — a native cross-model reviewer for Antigravity users who don't run Codex MCP / Oracle. Added in [#267](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/pull/267).
@@ -393,7 +399,7 @@ The mainline reviewer contract is `mcp__codex__codex` + `mcp__codex__codex-reply
 
 If Codex MCP is broken in your setup, prefer in order:
 
-1. Fix the MCP registration: `claude mcp add codex -s user -- python3 "$HOME/aris_repo/mcp-servers/codex-exec/server.py"` (codex-cli 0.154 removed `codex mcp-server`; the bridge replaces it on every version), then `/mcp` in-session to (re)connect.
+1. Fix the MCP registration: `claude mcp add codex -s user -- python3 "$HOME/aris_repo/mcp-servers/codex-exec/server.py"` (codex-cli 0.154 removed `codex mcp-server`; the bridge replaces it — verified on 0.153.4 and 0.154.0, needs `codex exec resume`), then `/mcp` in-session to (re)connect.
 2. Codex-CLI-as-executor: use the native mirror pack [`skills/skills-codex/`](../skills-codex/) — designed to run inside Codex CLI without Claude-side MCP.
 3. One-shot `codex exec` only for skills whose review is a single call with no follow-up reply.
 

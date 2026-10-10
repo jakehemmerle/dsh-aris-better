@@ -25,8 +25,8 @@ codex --version && codex login status
 If `codex` is missing, stop and tell the user to run
 `npm install -g @openai/codex && codex login`, then `/aris:setup` again.
 If it is installed but not logged in, tell the user to run `!codex login`
-(the `!` prefix runs it in this session) and come back. Any codex-cli version
-works — the bridge below uses `codex exec`, which every version has.
+(the `!` prefix runs it in this session) and come back. The bridge below uses
+`codex exec` and `codex exec resume`; verified on codex-cli 0.153.4 and 0.154.0.
 
 ## 2. Register the `codex` MCP server (user scope)
 

@@ -89,7 +89,7 @@ claude mcp add codex -s user -- python3 "$HOME/aris_repo/mcp-servers/codex-exec/
 
 - `codex`（add 后面）— 注册名称。ARIS 的 skill 硬编码了这个名字，**不要改**
 - `-s user` — 全局生效，所有项目都能用
-- `python3 .../mcp-servers/codex-exec/server.py` — ARIS 自带的 Codex MCP server，底下跑的是 `codex exec`，写你 clone 的绝对路径。codex-cli 0.154 删掉了内置的 `codex mcp-server`；0.153 及更早版本上这个桥接同样能用，不管什么版本都注册它
+- `python3 .../mcp-servers/codex-exec/server.py` — ARIS 自带的 Codex MCP server，底下跑的是 `codex exec`，写你 clone 的绝对路径。codex-cli 0.154 删掉了内置的 `codex mcp-server`；桥接在 0.153.4 和 0.154.0 上验证过（需要 `codex exec resume`），这两个版本都直接注册它
 
 注册后重启 Claude Code，然后验证：
 

@@ -89,7 +89,7 @@ claude mcp add codex -s user -- python3 "$HOME/aris_repo/mcp-servers/codex-exec/
 
 - `codex` (after `add`) — the registered name. ARIS skills hardcode this name, **do not change it**
 - `-s user` — applies globally to all projects
-- `python3 .../mcp-servers/codex-exec/server.py` — ARIS's own MCP server for Codex, driving `codex exec` underneath; use the absolute path of your clone. codex-cli 0.154 removed the built-in `codex mcp-server`; on 0.153 or older this bridge works the same way, so register it regardless of version
+- `python3 .../mcp-servers/codex-exec/server.py` — ARIS's own MCP server for Codex, driving `codex exec` underneath; use the absolute path of your clone. codex-cli 0.154 removed the built-in `codex mcp-server`; the bridge is verified on 0.153.4 and 0.154.0 (it needs `codex exec resume`), so register it regardless of which of those you run
 
 Restart Claude Code after registration, then verify:
 

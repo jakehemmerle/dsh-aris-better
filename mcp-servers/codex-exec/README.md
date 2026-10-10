@@ -14,9 +14,9 @@ claude mcp add codex -s user -- python3 "$(pwd)/mcp-servers/codex-exec/server.py
 ```
 
 Use the absolute path of your ARIS clone (`$(pwd)` from inside it). Restart
-Claude Code; `claude mcp list` should show `codex … ✓ Connected`. Works on every
-codex-cli version that has `codex exec` (all of them), so there is no reason to
-keep the old registration on 0.153 either. Skills need no change.
+Claude Code; `claude mcp list` should show `codex … ✓ Connected`. Verified on
+codex-cli 0.153.4 and 0.154.0; needs a version with `codex exec resume`, so there
+is no reason to keep the old registration on 0.153 either. Skills need no change.
 
 Installed by copying `skills/` without keeping a clone? Clone the repo anywhere
 and point at its `server.py`; the file is self-contained.
