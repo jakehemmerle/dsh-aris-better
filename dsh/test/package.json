@@ -1,0 +1,10 @@
+{
+  "name": "dsh-aris-tests",
+  "private": true,
+  "type": "module",
+  "description": "Test-only dependencies for the dsh/ layer. Not shipped.",
+  "devDependencies": {
+    "fast-check": "4.10.2",
+    "playwright-core": "1.63.0"
+  }
+}

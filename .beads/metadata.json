@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "aris",
+  "project_id": "a6c19335-c74d-45d2-823b-577a1a8596a8"
+}

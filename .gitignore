@@ -52,3 +52,13 @@ patent/
 node_modules/
 package-lock.json
 pnpm-lock.yaml
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+
+# Test-only lock for dsh/test (the Nix checks build node_modules from it)
+!dsh/test/package-lock.json
