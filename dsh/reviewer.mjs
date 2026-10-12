@@ -29,6 +29,33 @@ const PERSONA = 'You are an independent reviewer in the ARIS research workflow, 
   + 'the request asks for. Do not modify files unless the request explicitly asks you to. Reply with the review '
   + 'itself: it is returned verbatim to the author.'
 
+/**
+ * One review round per thread at a time within this process: a reply loads the
+ * thread, runs the child and saves it back, so two concurrent replies would
+ * each push onto a stale copy and the second save would drop the first round
+ * (aris-2cs.12). Replies to different threads stay parallel; the lock is a
+ * promise chain keyed by thread id, shared by every reviewer instance loading
+ * this module (dsh loads one module instance per process).
+ */
+const threadLocks = new Map()
+
+/**
+ * Run one critical section per thread id, in submission order.
+ * @template T
+ * @param {string} threadId
+ * @param {() => Promise<T>} run
+ * @returns {Promise<T>}
+ */
+function withThreadLock(threadId, run) {
+  const tail = threadLocks.get(threadId) ?? Promise.resolve()
+  const result = tail.catch(() => {}).then(run)
+  const release = result.catch(() => {}).then(() => {
+    if (threadLocks.get(threadId) === release) threadLocks.delete(threadId)
+  })
+  threadLocks.set(threadId, release)
+  return result
+}
+
 /** @returns {string} the model-visible metadata line. */
 function metadataLine(value) {
   const { reviewer, executor } = value
@@ -213,10 +240,13 @@ export async function apply(ctx) {
     async execute(args, exec) {
       const threadId = args.threadId ?? args.conversationId
       if (!isThreadId(threadId)) throw new Error(`unknown reviewer threadId "${threadId}"; open a thread with mcp__codex__codex`)
-      const settings = reviewerSettings()
-      const thread = await loadThread(settings.threadDir, threadId)
-      if (thread === undefined) throw new Error(`unknown reviewer threadId "${threadId}"; open a thread with mcp__codex__codex`)
-      return runRound(exec, thread, args.prompt, settings)
+      // Load, run and save inside the thread's lock, or concurrent replies lose rounds.
+      return withThreadLock(threadId, async () => {
+        const settings = reviewerSettings()
+        const thread = await loadThread(settings.threadDir, threadId)
+        if (thread === undefined) throw new Error(`unknown reviewer threadId "${threadId}"; open a thread with mcp__codex__codex`)
+        return runRound(exec, thread, args.prompt, settings)
+      })
     },
   })
 
