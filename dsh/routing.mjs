@@ -41,14 +41,18 @@ const ORDERED_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /**
  * Efforts to try, best match first, never below the requested tier.
- * Codex's `ultra` sits above `xhigh`; dsh routes call that tier `max`.
+ * `max` tops dsh's ladder and never falls back below the request; Codex's
+ * `ultra` sits above it (no dsh name) and maps to `max` with an `xhigh` floor.
  * An omitted effort is ARIS's regular review tier, `xhigh`.
  * @param {string | undefined} requested - `config.model_reasoning_effort` from the skill.
  * @returns {string[]} effort ids in preference order.
  */
 export function effortCandidates(requested) {
   const effort = requested === undefined || requested === '' ? 'xhigh' : String(requested).toLowerCase()
-  if (effort === 'ultra' || effort === 'max') return ['max', 'xhigh']
+  // Codex's top tier has no dsh name: map it to max, with the SPEC's xhigh floor.
+  if (effort === 'ultra') return ['max', 'xhigh']
+  // Top of dsh's own ladder: never below the requested tier (aris-2cs.11).
+  if (effort === 'max') return ['max']
   const index = ORDERED_EFFORTS.indexOf(effort)
   if (index === -1) return [effort, 'xhigh', 'max']
   return ORDERED_EFFORTS.slice(index)

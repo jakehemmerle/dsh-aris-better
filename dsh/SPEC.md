@@ -100,7 +100,7 @@ Each call starts a `spawn` subagent (`delivery: 'caller'`; its tool allow-list o
 1. Executor = the calling agent's resolved route (`parentAgentOptionsForDelegation`). Family from the model id (port of `tools/review_gate.py:derive_model_family`).
 2. The configured reviewer routes are the only reviewer models. If the skill pinned `model` (most pin `gpt-6-astra`), routes serving exactly that model are tried first; a pin no route serves is ignored.
 3. Take the first route whose family differs from the executor's.
-4. A route is usable only if `llm.resolveCallConfig` accepts it with an effort at or above the requested tier (ladder: `ultra`→`max`,`xhigh`; `xhigh`→`xhigh`,`max`; `high`→`high`,`xhigh`,`max`; …). Never below `xhigh` for an `xhigh`/`ultra` request.
+4. A route is usable only if `llm.resolveCallConfig` accepts it with an effort on the request's ladder, never below the requested tier (`max`→`max`; `xhigh`→`xhigh`,`max`; `high`→`high`,`xhigh`,`max`; …). The one exception is Codex's top tier, which dsh has no name for: `ultra`→`max`,`xhigh`, whose floor is `xhigh`.
 5. No usable cross-family route → tool error `REVIEW_UNAVAILABLE` with the reason. No same-family fallback. An unknown executor family is allowed but labelled `independence=unverified`.
 
 Default reviewer routes (override with `aris-host` `config.reviewer.routes`):
