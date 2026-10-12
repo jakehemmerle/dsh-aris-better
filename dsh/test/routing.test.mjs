@@ -39,6 +39,18 @@ test('effort ladder never drops below the requested tier', () => {
   assert.deepEqual(effortCandidates('high'), ['high', 'xhigh', 'max'])
 })
 
+test('an explicit max request never falls below max (aris-2cs.11)', () => {
+  assert.deepEqual(effortCandidates('max'), ['max'])
+  assert.deepEqual(effortCandidates('MAX'), ['max'], 'case-insensitive, like the other tiers')
+  const ladder = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+  for (const tier of ladder) {
+    for (const candidate of effortCandidates(tier)) {
+      assert.ok(ladder.indexOf(candidate) >= ladder.indexOf(tier), tier + ' offered ' + candidate)
+    }
+  }
+  assert.deepEqual(effortCandidates('ultra'), ['max', 'xhigh'], 'ultra maps to max with an xhigh floor per SPEC')
+})
+
 test('a skill pin outside the configured routes is not used: Claude executor gets gpt-6.1-sol at the pinned tier', async () => {
   const selection = await selectReviewerRoute({
     executor: { provider: 'anthropic', model: 'claude-opus-5-5' },
