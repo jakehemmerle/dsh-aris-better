@@ -40,7 +40,7 @@ function corpusCounts() {
 test('SPEC states the corpus call-site counts this repository actually has (aris-2cs.15)', () => {
   const { plain, reply } = corpusCounts()
   const pattern = new RegExp(
-    'corpus calls ' + BT + 'mcp__codex__codex' + BT + ' \\((\\d+) call sites\\) and '
+    'corpus calls ' + BT + 'mcp__codex__codex' + BT + ' \\((\\d+) call sites\\) and\\s+'
     + BT + 'mcp__codex__codex-reply' + BT + ' \\((\\d+)\\)',
   )
   const match = pattern.exec(SPEC())

@@ -22,9 +22,14 @@ Problems with 0.1.1 on current dsh:
 | Obsolete API use | `connection.rpc.handle(…, {authority: 'loopback'})` — the third argument no longer exists. |
 
 Upstream has no open issue or branch work for dsh 0.2.x, so this is a fork,
-not a PR series. The corpus (skills/, tools/, templates/, mcp-servers/) stays
-byte-identical to upstream `main` so it can be re-merged at any time; only
-`dsh/`, `package.json` and the READMEs differ.
+not a PR series. The corpus (skills/, tools/, templates/, mcp-servers/) matches
+upstream `main` so it can be re-merged at any time. Besides `dsh/`,
+`package.json` and the READMEs, exactly one corpus file differs, deliberately:
+`tools/check_skills_inventory.py` drops the README count/anchor checks, which
+target upstream main's full-ARIS READMEs, while this branch's root READMEs are
+the dsh distribution ones. `dsh/test/spec-drift.test.mjs` guards SPEC's claims
+about the corpus (call-site counts), the §3.1 layout and the reviewer's tool
+lists.
 
 ## 2. Product
 
@@ -51,6 +56,7 @@ session — and only that session — the ARIS research workflow.
 | Module | Row | Scope | Purpose |
 |---|---|---|---|
 | `index.mjs` | `aris-host` | host | Publishes `ARIS_REPO` and the reviewer settings (`config.reviewer`); serves the ARIS tab's read-only RPC. Loads the `dsh.client` browser half. |
+| `run-status.mjs` | — | host | One read-only `/aris` RPC (`endpoint: 'state'`) projecting the loop's durable artifacts: `REVIEW_STATE.json`, the resumable pipeline run (`.aris/runs`), artifact mtimes and the latest criticisms. Missing artifacts are reported absent, never guessed. |
 | `skills.mjs` | `aris-skills` (preset child) | preset | Mounts `skills/` at bundled rank 600 with provider name `aris`. |
 | `reviewer.mjs` | `aris-reviewer` (preset child) | preset | Registers the reviewer tools (§3.3). |
 | `routing.mjs` | — | pure | Model-family derivation, route and effort selection. Unit-tested. |
@@ -82,9 +88,10 @@ upgrade that changes Standard fails loudly instead of silently diverging.
 
 ### 3.3 Reviewer: Codex contract, dsh execution
 
-The skills call `mcp__codex__codex` (146 call sites) and
-`mcp__codex__codex-reply` (74). The preset registers native tools with those
-exact names and argument shapes:
+The corpus calls `mcp__codex__codex` (176 call sites) and
+`mcp__codex__codex-reply` (82) across `skills/`, `tools/`, `templates/` and
+`mcp-servers/` (`dsh/test/spec-drift.test.mjs` recounts them). The preset
+registers native tools with those exact names and argument shapes:
 
 | Tool | Arguments | Behaviour |
 |---|---|---|
@@ -94,7 +101,7 @@ exact names and argument shapes:
 Each call starts a `spawn` subagent (`delivery: 'caller'`; its tool allow-list omits `subagent`, `workflow` and the reviewer tools, so it cannot delegate or recurse) with:
 - `agentOptions` = the selected reviewer route,
 - `persona` = an independent-reviewer prefix,
-- `toolFilter.allow` = read-only tools (`read`, `read_image`, `glob`, `grep`, `web_search`, `web_fetch`, `skill`), plus `bash`/`write`/`edit` for `workspace-write` and `danger-full-access`. Names absent from the caller's scope are dropped.
+- `toolFilter.allow` = read-only tools (`read`, `read_image`, `glob`, `grep`, `web_search`, `web_fetch`, `skill`), plus `bash`, `pwsh`, `write` and `edit` for `workspace-write` and `danger-full-access`. Names absent from the caller's scope are dropped.
 
 **Route selection** (pure, `routing.mjs`):
 1. Executor = the calling agent's resolved route (`parentAgentOptionsForDelegation`). Family from the model id (port of `tools/review_gate.py:derive_model_family`).
