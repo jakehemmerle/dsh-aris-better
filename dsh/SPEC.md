@@ -180,3 +180,39 @@ Nix (store-path install): insert `aris-host` (`name: <store>/dsh/index.mjs`) and
 - **Replay cost.** Long multi-round threads resend prior rounds. Reviewer windows are 272k–1M tokens; ARIS loops cap at 4–5 rounds.
 - **Tool name collision.** Installing the upstream `codex-exec` MCP server in the same preset would register the same names; don't.
 - **Permission policy.** Reviewer children inherit the session's approval/sandbox preset; `read-only` is enforced by tool filtering, not by an OS sandbox.
+
+## 8. Properties
+
+Every property has a stable ID, an observable oracle and the surface(s) where it is
+observed. `dsh/TESTING.md` maps each ID to the tests that observe it, with the last
+result, seeds and versions. Web- and TUI-surface acceptance that still needs the
+Playwright suites (aris-2cs.5) or the TUI rig (aris-2cs.6) is listed as W-xx at the
+end; it is not claimed as tested.
+
+| ID | Property (invariant) | Oracle | Surface(s) |
+|---|---|---|---|
+| P-01 | A profile with the ARIS bundle composes exactly `aris-host` and `preset-aris` and changes nothing else: no `agent-default-model` row of its own (§6.1). | `dsh --dump-config` row tree | rig (real dsh CLI) |
+| P-02 | A profile without the bundle composes no ARIS rows (§6.3, composition half). | `dsh --dump-config` row tree | rig (real dsh CLI) |
+| P-03 | `preset-aris` equals the installed Standard preset's rows outside the ARIS-only rows, so a dsh upgrade that changes Standard fails loudly. | deep-equal against `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` | contract (installed dsh); hard-fails without dsh, never skips (aris-2cs.13) |
+| P-04 | The model family comes from the model id only, never the provider route: it is the single family the id's delimited keywords name; zero or several families → `unknown`. Two keywords of one family stay that family. | ported keyword table (§3.3; `tools/review_gate.py:derive_model_family`) | unit (examples + fast-check properties) |
+| P-05 | Effort candidates are exactly the ladder from the requested tier upward — never below it: `max`→`[max]`; `ultra`→`[max, xhigh]` (Codex's unnamed top tier, `xhigh` floor); omitted → `[xhigh, max]`; an unknown tier is offered verbatim, then `xhigh`, `max`. | dsh's effort ladder (§3.3 (4)) | unit (examples + fast-check properties) |
+| P-06 | Route selection: candidates keep the configured order with skill-pinned routes first, de-duplicated; unknown- and same-family routes are skipped; selection tries candidate-major × effort-minor — the preferred route is retried at its next effort before any other route is tried; the resolver's `maxTokens` is carried so the child never inherits the executor's cap. | `routing.mjs` as specified in §3.3 (2)–(4) | unit (fast-check properties) + contract |
+| P-07 | Fail-closed independence: with no usable cross-family route the tools throw `REVIEW_UNAVAILABLE` and never fall back to the same family (start or reply); an unknown executor family is reviewed but labelled `independence=unverified` (§3.3 (5), §2 Goal 3). | `REVIEW_UNAVAILABLE` error with per-attempt reasons | unit (fast-check properties) + contract |
+| P-08 | Reviewer tool surface: native tools named exactly `mcp__codex__codex` / `mcp__codex__codex-reply` with the Codex argument shapes (§3.3); sandbox `read-only` mounts exactly the mounted read tools, writable sandboxes add exactly the write tools, unmounted names are dropped, and the child cannot delegate, recurse or review (`subagent`, `workflow`, reviewer tools absent). | real `defineTool` / `parentAgentOptionsForDelegation` / `scopeOf` seams with faked child, resolver and mounted-tool table | contract (real dsh packages) |
+| P-09 | Thread durability: every round is persisted atomically to `$DSH_HOME/aris/reviewer-threads/<id>.json`; `codex-reply` replays every earlier round in order then the new message; unknown or hostile thread ids load nothing. | thread store on disk + replay prompt text | unit + contract |
+| P-10 | Model-visible output starts with the metadata line the corpus parses (§3.3 Result), including honest `requested_model`/`requested_model_used` reporting. | regex on the rendered tool output | contract |
+| P-11 | Host-row lifecycle: `apply` publishes exactly the reviewer settings, `ARIS_REPO` and the `/aris` run-status RPC; disposal withdraws exactly those (env restored, settings back to defaults, RPC unmounted); an operator-set `ARIS_REPO` wins and survives disposal; a bad config fails activation before any effect; the row re-applies after disposal. On the rig: dsh web boots with the bundle, stops cleanly and leaves the profile tree fully removable. | recording ctx seam + rig lifecycle | unit seam + rig (real dsh web) |
+| P-12 | Run-status honesty: the `/aris` `state` RPC reports artifacts as they are on disk (missing → `exists:false`, never guessed), a malformed `REVIEW_STATE.json` becomes a verbatim `stateError`, criticisms are lifted verbatim or absent, and the newest `.aris/runs` run is projected with its phases as stored. | temp-workspace projection through the inject seam | unit seam |
+| P-13 | SPEC ↔ repository honesty: the corpus call-site counts, the §3.1 module layout and the reviewer's tool lists stated in this SPEC are re-derived from the repo and must match. | recount + name check against `skills/`, `tools/`, `templates/`, `mcp-servers/`, `dsh/` | drift guard (repo-local facts) |
+| P-14 | Round serialization: two concurrent `codex-reply` calls on one thread both land with distinct round numbers and neither is lost or duplicated; replies to different threads stay parallel (§3.3 Threads). | thread store after concurrent replies (real per-thread promise chain) | contract |
+
+### Web/TUI acceptance pending the property suites (aris-2cs.5 / .6)
+
+- **W-01** The web preset picker lists ARIS and the preset activates (not `broken`) (§6.2).
+- **W-02** Standard/PTC sessions list no ARIS skills and no reviewer tools (§6.3, session half).
+- **W-03** In a real ARIS session with a Claude executor, `mcp__codex__codex` runs a GPT-family child and returns metadata + verdict (§6.4).
+- **W-04** With a GPT executor the reviewer routes to Claude (§6.5).
+- **W-05** With every cross-family route removed, the tool returns `REVIEW_UNAVAILABLE` in a real session (§6.6).
+- **W-06** Loading the bundle into a real dsh-TUI profile is inert for Launchpad and chat under generated key sequences (TUI surface; presets are web-only at 0.2.1).
+
+Section 6 acceptance mapping: §6.1→P-01/P-02; §6.2→W-01; §6.3→P-02 (composition) + W-02 (sessions); §6.4→P-06/P-08/P-09/P-10/P-14 observed at contract level, W-03 on the web surface; §6.5→P-06 (reroute) + W-04; §6.6→P-07 + W-05; §6.7→ every unit/contract suite via `npm test` in `dsh/test`.
