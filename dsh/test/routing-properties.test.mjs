@@ -224,6 +224,44 @@ test('P-06: selection tries candidate-major, effort-minor, in exactly that order
   ), { numRuns: fcNumRuns(150) })
 })
 
+test('P-06: the route is preferred over the effort tier: candidates iterate major, efforts minor', async () => {
+  await fc.assert(fc.asyncProperty(
+    routesArb.filter(routes => candidateRoutes({ executorFamily: 'anthropic', requestedModel: undefined, routes }).candidates.length >= 2),
+    fc.constantFrom(...LADDER, 'ultra'),
+    async (routes, requestedEffort) => {
+      const { candidates } = candidateRoutes({ executorFamily: 'anthropic', requestedModel: undefined, routes })
+      const efforts = effortCandidates(requestedEffort)
+      if (efforts.length < 2) return // single-effort requests cannot separate the orders
+      const calls = []
+      // candidates[0] rejects its best effort but accepts the next one; every
+      // later candidate accepts anything. Route-first means candidates[0] still wins.
+      const selection = await selectReviewerRoute({
+        executor: { provider: 'anthropic', model: 'claude-opus-5-5' },
+        requestedModel: undefined,
+        requestedEffort,
+        routes,
+        resolve: async (route) => {
+          calls.push(route)
+          const first = route.provider === candidates[0].provider && route.model === candidates[0].model
+          if (first && route.reasoningEffort === efforts[0]) throw new Error('top tier unavailable for the preferred route')
+          return {}
+        },
+      })
+      assert.deepEqual(
+        calls,
+        [
+          { provider: candidates[0].provider, model: candidates[0].model, reasoningEffort: efforts[0] },
+          { provider: candidates[0].provider, model: candidates[0].model, reasoningEffort: efforts[1] },
+        ],
+        'the preferred route is retried at its next effort before any other route is tried',
+      )
+      assert.equal(selection.route.provider, candidates[0].provider)
+      assert.equal(selection.route.model, candidates[0].model)
+      assert.equal(selection.route.reasoningEffort, efforts[1])
+    },
+  ), { numRuns: fcNumRuns(150) })
+})
+
 test('P-07: selection fails closed with REVIEW_UNAVAILABLE after exactly every candidate x effort pair', async () => {
   await fc.assert(fc.asyncProperty(
     routesArb,
