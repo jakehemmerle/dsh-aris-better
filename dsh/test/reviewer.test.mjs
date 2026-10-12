@@ -152,6 +152,26 @@ test('a child that does not complete, or completes empty, is REVIEW_UNAVAILABLE'
   assert.equal(await loadThread(threadDir, h.activations[0].childId ? 'aris-rv-00000000-0000-4000-8000-000000000000' : ''), undefined)
 })
 
+test('two concurrent replies on one thread both land (aris-2cs.12)', async (t) => {
+  const { h, threadDir } = await harness(t, {
+    child: (_spec, index) => ({ text: 'answer ' + index, delayMs: 100 }),
+  })
+  const first = await h.start({ prompt: 'review v1' }, CLAUDE())
+  const threadId = first.value.threadId
+  const [a, b] = await Promise.all([
+    h.reply({ prompt: 'concurrent A', threadId }, CLAUDE()),
+    h.reply({ prompt: 'concurrent B', threadId }, CLAUDE()),
+  ])
+  const thread = await loadThread(threadDir, threadId)
+  assert.equal(thread.rounds.length, 3, 'both concurrent rounds recorded on top of round 1')
+  assert.deepEqual(
+    thread.rounds.slice(1).map(round => round.prompt).sort(),
+    ['concurrent A', 'concurrent B'],
+    'neither reply is lost or duplicated',
+  )
+  assert.equal(new Set([a.value.round, b.value.round]).size, 2, 'the two replies report distinct round numbers')
+})
+
 test('unloading withdraws both tools and every effect', async (t) => {
   const threadDir = await mkdtemp(join(tmpdir(), 'aris-reviewer-'))
   t.after(() => rm(threadDir, { recursive: true, force: true }))
