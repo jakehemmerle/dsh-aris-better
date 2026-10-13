@@ -12,29 +12,34 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import fc from 'fast-check'
-import { ARIS_RPC_CHANNEL, registerRunStatus } from '../run-status.mjs'
+import { ARIS_RPC_ENDPOINT, ARIS_STATE_ROUTE, registerRunStatus, runStatusHandler } from '../run-status.mjs'
 
-/** Mount the RPC like a host with connection+sessions, and return the handler. */
+/**
+ * Mount the RPC like a host with connection+sessions. The registration seam
+ * is the Fetch route registerRunStatus actually uses; the projection tests
+ * below drive the transport-free core, so a wire change cannot bend them.
+ */
 function mountedHandler(workspaces) {
-  let handler
+  let route
+  const sessions = { get: id => (workspaces[id] ? { header: { cwd: workspaces[id] } } : undefined) }
   const scoped = {
-    effect(fn) { fn() },
-    connection: { rpc: { handle: (channel, h) => { assert.equal(channel, ARIS_RPC_CHANNEL); handler = h } } },
-    sessions: { get: id => (workspaces[id] ? { header: { cwd: workspaces[id] } } : undefined) },
+    effect: (fn) => fn(),
+    connection: { fetch: { register: (r) => { route = r } } },
+    sessions,
   }
   registerRunStatus({ inject: (needs, fn) => { assert.deepEqual(needs, ['connection', 'sessions']); fn(scoped) } })
-  return handler
+  return { route, core: runStatusHandler(sessions) }
 }
 
-const call = (handler, sessionId) => handler('state', { sessionId })
+const call = (mounted, sessionId) => (mounted.core ?? mounted)('state', { sessionId })
 
 test('unknown endpoint and missing sessionId are structured errors, never throws', async () => {
-  const handler = mountedHandler({})
+  const { core: handler } = mountedHandler({})
   assert.deepEqual(await handler('other', {}), { ok: false, error: { code: 'UNKNOWN_ENDPOINT', message: 'unknown ARIS endpoint "other"' } })
-  const noSession = await call(handler, undefined)
+  const noSession = await call({ core: handler }, undefined)
   assert.equal(noSession.ok, false)
   assert.equal(noSession.error.code, 'BAD_REQUEST')
-  const missing = await call(handler, 'no-such-session')
+  const missing = await call({ core: handler }, 'no-such-session')
   assert.deepEqual(missing, { ok: true, value: { workspace: undefined, artifacts: [] } }, 'an unknown session is an empty projection')
 })
 
@@ -161,4 +166,49 @@ test('the newest pipeline run wins and unparseable runs are skipped', async (t) 
   const { value } = await call(mountedHandler({ s: workspace }), 's')
   assert.equal(value.pipeline.runId, 'new')
   assert.deepEqual(value.pipeline.phases, [{ phase: 'review', status: 'accepted', artifact: undefined, reviewer: 'gpt', reviewerFamily: undefined, independence: undefined, verdictId: undefined }])
+})
+
+/** The registered route, driven through a wire-shaped POST. */
+async function wire(route, method, payload, headers = { 'content-type': 'application/json' }) {
+  return route.fetch(new Request('http://dsh.internal' + ARIS_STATE_ROUTE, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ type: 'client-request', rpcId: 'w1', method, payload }),
+  }))
+}
+
+test('wire contract: one exact POST route on the shared /api gateway', () => {
+  const { route } = mountedHandler({})
+  assert.equal(route.path, ARIS_STATE_ROUTE)
+  assert.deepEqual(route.methods, ['POST'])
+  assert.equal(route.requestBody, 'buffered')
+})
+
+test('wire: the canonical client-request envelope frames the core projection', async (t) => {
+  const workspace = await mkdtemp(join(tmpdir(), 'aris-rs-'))
+  t.after(() => rm(workspace, { recursive: true, force: true }))
+  const { route } = mountedHandler({ s: workspace })
+  const res = await wire(route, ARIS_RPC_ENDPOINT, { sessionId: 's' })
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.type, 'server-response')
+  assert.equal(body.rpcId, 'w1')
+  assert.equal(body.result.ok, true)
+  assert.equal(body.result.value.workspace, workspace)
+  assert.deepEqual(body.result.value.artifacts.map(a => a.exists), [false, false, false, false])
+})
+
+test('wire: foreign methods and envelopes fail with the rpcFetchHandler shapes', async () => {
+  const { route } = mountedHandler({})
+  const badType = await wire(route, ARIS_RPC_ENDPOINT, {}, { 'content-type': 'text/plain' })
+  assert.equal(badType.status, 415)
+  // An envelope-consistent request with no sessionId fails at the core: its
+  // own BAD_REQUEST, framed with the wire's details record.
+  const body = await wire(route, ARIS_RPC_ENDPOINT, {}, { 'content-type': 'application/json' })
+  const envelope = await body.json()
+  assert.equal(envelope.result.ok, false)
+  assert.equal(envelope.result.error.code, 'BAD_REQUEST')
+  assert.deepEqual(envelope.result.error.details, {}, 'the wire frames every core failure with a details record')
+  const foreign = await wire(route, 'other', { sessionId: 's' })
+  assert.equal((await foreign.json()).result.error.code, 'gateway/bad-request')
 })

@@ -36,6 +36,7 @@ test('property: generated picker/tab/session sequences keep every invariant (W-0
     newSession: fc.boolean(),
   })
 
+  let expectedTurns = 0
   await fc.assert(
     fc.asyncProperty(actions, async (action) => {
       const page = s.page
@@ -50,6 +51,7 @@ test('property: generated picker/tab/session sequences keep every invariant (W-0
         if (!sessionStarted) {
           await submitPrompt(page, 'property probe ' + (action.preset ?? 'default'))
           sessionStarted = true
+          expectedTurns += 1
         }
       }
 
@@ -72,15 +74,18 @@ test('property: generated picker/tab/session sequences keep every invariant (W-0
       if (action.newSession) {
         await page.getByRole('button', { name: 'New session' }).first().click({ timeout: 15000 })
         await sleep(500)
-        await assertHero(page, action.preset ?? 'Standard mode')
+        // The picked preset applies to the session you are about to start;
+        // a New session resets the hero to the default preset (probed: pick
+        // ARIS -> run -> New session resets the seat to Standard mode).
+        await assertHero(page, 'Standard mode')
       }
     }),
     { seed: SEED, numRuns: NUM_RUNS },
   )
 
-  // Every session turn went to the mock default model, whatever the picker did.
+  // Exactly one model turn per session-starting run, always the rig default.
   const turns = s.mock.turns()
-  assert.ok(turns.length >= NUM_RUNS, 'a turn per session-starting run, got ' + turns.length)
+  assert.equal(turns.length, expectedTurns, 'one turn per session-starting run')
   for (const turn of turns) assert.equal(turn.model, 'mock-alpha', 'executor model stays the rig default')
 })
 

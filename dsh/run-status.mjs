@@ -9,8 +9,13 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 
-/** Channel the browser half calls. */
-export const ARIS_RPC_CHANNEL = '/aris'
+/**
+ * The wire contract: one exact Fetch route on the shared `/api` gateway,
+ * whose request `method` names the (single) endpoint. Mirrors the shapes
+ * of dsh's `rpcFetchHandler`/`fullResponse` without importing them.
+ */
+export const ARIS_STATE_ROUTE = '/api/aris/state'
+export const ARIS_RPC_ENDPOINT = 'aris/state'
 
 /**
  * Artifacts every auto-review-loop run maintains, relative to the workspace.
@@ -139,43 +144,90 @@ async function readPipeline(workspace) {
 }
 
 /**
+ * The projection itself, transport-free: `state` is the only endpoint, the
+ * payload's `sessionId` finds the workspace, and every field the artifacts
+ * do not carry is simply absent. Unit and contract tests drive this at the
+ * seam; the wire below only frames it.
+ * @param {{ get: (sessionId: string) => { header?: { cwd?: string } } | undefined }} sessions
+ * @returns {(endpoint: string, payload: unknown) => Promise<{ok: boolean, value?: unknown, error?: {code: string, message: string}}>}
+ */
+export function runStatusHandler(sessions) {
+  return async (endpoint, payload) => {
+    if (endpoint !== 'state') {
+      return { ok: false, error: { code: 'UNKNOWN_ENDPOINT', message: `unknown ARIS endpoint "${endpoint}"` } }
+    }
+    const sessionId = typeof payload === 'object' && payload !== null ? payload.sessionId : undefined
+    if (typeof sessionId !== 'string') {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'sessionId is required' } }
+    }
+    const workspace = sessions.get(sessionId)?.header?.cwd
+    if (typeof workspace !== 'string' || !isAbsolute(workspace)) {
+      return { ok: true, value: { workspace: undefined, artifacts: [] } }
+    }
+    const { state, stateError } = await readState(workspace)
+    const pipeline = await readPipeline(workspace)
+    const criticisms = await readCriticisms(workspace)
+    const artifacts = await Promise.all(ARTIFACTS.map(relative => describe(workspace, relative)))
+    return {
+      ok: true,
+      value: {
+        workspace,
+        ...state !== undefined ? { state } : {},
+        ...stateError !== undefined ? { stateError } : {},
+        ...pipeline !== undefined ? { pipeline } : {},
+        ...criticisms !== undefined ? { criticisms } : {},
+        artifacts,
+        readAt: Date.now(),
+      },
+    }
+  }
+}
+
+/**
  * Register the run-status RPC when a browser connection exists.
- * Headless compositions have no `connection`, so the channel never mounts.
+ * Headless compositions have no `connection`, so the route never mounts.
+ *
+ * Transport: dsh 0.2.1-alpha.2 cannot mount a plugin's own prefix channel —
+ * `connection.rpc.handle` resolves `webServer` from the connection service's
+ * own context and throws "cannot get property \"webServer\" without inject"
+ * for every plugin row (observed on the rig; no first-party caller uses it).
+ * The usable seam is an exact Fetch route under the already-mounted `/api`
+ * gateway, shaped like `rpcFetchHandler` (same envelope, auth and errors),
+ * so the browser half keeps using `connection.rpc.call('/api', …)`.
+ *
  * @param ctx - the ARIS plugin's context.
  */
 export function registerRunStatus(ctx) {
   ctx.inject(['connection', 'sessions'], (scoped) => {
-    scoped.effect(() => scoped.connection.rpc.handle(
-      ARIS_RPC_CHANNEL,
-      async (endpoint, payload) => {
-        if (endpoint !== 'state') {
-          return { ok: false, error: { code: 'UNKNOWN_ENDPOINT', message: `unknown ARIS endpoint "${endpoint}"` } }
+    const handle = runStatusHandler(scoped.sessions)
+    scoped.effect(() => scoped.connection.fetch.register({
+      path: ARIS_STATE_ROUTE,
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request) => {
+        if (request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json') {
+          return new Response('content type must be application/json', { status: 415 })
         }
-        const sessionId = typeof payload === 'object' && payload !== null ? payload.sessionId : undefined
-        if (typeof sessionId !== 'string') {
-          return { ok: false, error: { code: 'BAD_REQUEST', message: 'sessionId is required' } }
+        let message
+        try {
+          message = await request.json()
+        } catch {
+          return new Response('body is not JSON', { status: 400 })
         }
-        const workspace = scoped.sessions.get(sessionId)?.header?.cwd
-        if (typeof workspace !== 'string' || !isAbsolute(workspace)) {
-          return { ok: true, value: { workspace: undefined, artifacts: [] } }
+        const invalid = { type: 'server-response', rpcId: 'invalid-request', result: { ok: false, error: { code: 'gateway/bad-request', message: 'invalid client-request message', details: { issues: [] } } } }
+        if (typeof message !== 'object' || message === null || Array.isArray(message)) return Response.json(invalid)
+        const rpcId = typeof message.rpcId === 'string' ? message.rpcId : undefined
+        const respond = (result) => Response.json({ type: 'server-response', rpcId: rpcId ?? 'invalid-request', result })
+        const failure = (code, text) => respond({ ok: false, error: { code, message: text, details: {} } })
+        if (message.type !== 'client-request') return failure('gateway/bad-request', 'invalid client-request message')
+        if (rpcId === undefined) return failure('gateway/bad-request', 'invalid client-request message')
+        if (message.method !== ARIS_RPC_ENDPOINT) {
+          return failure('gateway/bad-request', `method ${JSON.stringify(message.method)} does not match endpoint ${JSON.stringify(ARIS_RPC_ENDPOINT)}`)
         }
-        const { state, stateError } = await readState(workspace)
-        const pipeline = await readPipeline(workspace)
-        const criticisms = await readCriticisms(workspace)
-        const artifacts = await Promise.all(ARTIFACTS.map(relative => describe(workspace, relative)))
-        return {
-          ok: true,
-          value: {
-            workspace,
-            ...state !== undefined ? { state } : {},
-            ...stateError !== undefined ? { stateError } : {},
-            ...pipeline !== undefined ? { pipeline } : {},
-            ...criticisms !== undefined ? { criticisms } : {},
-            artifacts,
-            readAt: Date.now(),
-          },
-        }
+        const projection = await handle('state', message.payload)
+        if (projection.ok) return respond({ ok: true, value: projection.value })
+        return failure(projection.error.code, projection.error.message)
       },
-    ), 'ARIS run-status RPC')
+    }), 'ARIS run-status RPC')
   })
 }

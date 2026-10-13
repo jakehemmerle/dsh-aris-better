@@ -110,7 +110,9 @@ window.__ModuleLoader__.load({
         let live = true
         const controller = new AbortController()
         const poll = () => {
-          connection.rpc.call('/aris', 'state', { sessionId: props.sessionId }, controller.signal)
+          // Endpoint mirror of run-status.mjs ARIS_RPC_ENDPOINT: dsh 0.2.1 cannot
+          // mount plugin channels, so the state RPC rides the shared /api gateway.
+          connection.rpc.call('/api', 'aris/state', { sessionId: props.sessionId }, controller.signal)
             .then((result) => {
               if (!live) return
               if (result.ok) {

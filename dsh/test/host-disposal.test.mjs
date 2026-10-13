@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { apply } from '../index.mjs'
 import { DEFAULT_ROUTES, reviewerSettings } from '../settings.mjs'
-import { ARIS_RPC_CHANNEL } from '../run-status.mjs'
+import { ARIS_STATE_ROUTE } from '../run-status.mjs'
 import { makeProfile, startWeb } from './rig/rig.mjs'
 import { startMockLlm } from './rig/mock-llm.mjs'
 import { dshRoot } from './support/dsh-root.mjs'
@@ -25,27 +25,28 @@ const PACKAGE_ROOT = ROOT
 /**
  * A recording stand-in for the host ctx: effects register and keep their
  * dispose functions, inject callbacks see a fake connection/sessions scope
- * whose rpc.handle records channels. disposeAll() runs dsh's LIFO teardown.
+ * whose fetch.register records exact routes. disposeAll() runs dsh's LIFO
+ * teardown.
  */
 function recordingCtx() {
   const effects = []
   const injections = []
-  const rpcHandlers = new Map()
+  const fetchRoutes = new Map()
   const keep = (fn, label) => {
     const dispose = fn()
     effects.push({ label, dispose: typeof dispose === 'function' ? dispose : undefined })
   }
   const connection = {
-    rpc: {
-      handle(channel, handler) {
-        rpcHandlers.set(channel, handler)
-        return () => rpcHandlers.delete(channel)
+    fetch: {
+      register(route) {
+        fetchRoutes.set(route.path, route)
+        return () => fetchRoutes.delete(route.path)
       },
     },
   }
   const sessions = { get: () => undefined }
   return {
-    effects, injections, rpcHandlers,
+    effects, injections, fetchRoutes,
     ctx: {
       effect: keep,
       inject(needs, fn) {
@@ -68,7 +69,7 @@ test('apply publishes exactly the reviewer settings, ARIS_REPO and the run-statu
     assert.deepEqual(h.injections, [['connection', 'sessions']])
     assert.deepEqual(reviewerSettings().routes, routes, 'the configured routes are live for the preset reviewer')
     assert.equal(process.env.ARIS_REPO, PACKAGE_ROOT)
-    assert.ok(h.rpcHandlers.has(ARIS_RPC_CHANNEL), 'the /aris channel is mounted')
+    assert.ok(h.fetchRoutes.has(ARIS_STATE_ROUTE), 'the /api/aris/state route is mounted')
   } finally {
     h.disposeAll()
   }
@@ -82,7 +83,7 @@ test('dispose withdraws everything: env restored, settings back to defaults, RPC
     h.disposeAll()
     assert.equal(process.env.ARIS_REPO, undefined, 'ARIS_REPO set by the row is deleted again')
     assert.deepEqual(reviewerSettings().routes, DEFAULT_ROUTES, 'settings fall back to the defaults')
-    assert.equal(h.rpcHandlers.size, 0, 'the run-status handler is withdrawn')
+    assert.equal(h.fetchRoutes.size, 0, 'the run-status handler is withdrawn')
   } finally {
     delete process.env.ARIS_REPO
   }
@@ -108,7 +109,7 @@ test('a bad config fails activation before any effect lands', () => {
     assert.throws(() => apply(h.ctx, { reviewer: { routes: 'nope' } }), /routes must be a list/)
     assert.equal(h.effects.length, 0, 'no effects registered')
     assert.equal(process.env.ARIS_REPO, undefined)
-    assert.equal(h.rpcHandlers.size, 0)
+    assert.equal(h.fetchRoutes.size, 0)
   } finally {
     delete process.env.ARIS_REPO
   }
