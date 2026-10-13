@@ -1,6 +1,6 @@
 {
   "name": "@jakehemmerle/dsh-aris",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0-alpha.2",
   "description": "ARIS research workflow as a DeepSeek Harness agent preset: 84 skills plus an in-harness reviewer from a different model family.",
   "license": "MIT",
   "type": "module",
