@@ -286,9 +286,12 @@ test('P-07: selection fails closed with REVIEW_UNAVAILABLE after exactly every c
           assert.ok(error instanceof ReviewUnavailableError)
           assert.match(error.message, /^REVIEW_UNAVAILABLE/)
           const { candidates } = candidateRoutes({ executorFamily, requestedModel: undefined, routes })
+          // Routes that differ only by identity dedup to one skip (the CI
+          // shrink found two identical deepseek-official/air-spark-1.0 rows).
+          const uniqueRoutes = new Set(routes.map(r => r.provider + '/' + r.model)).size
           const efforts = effortCandidates(requestedEffort)
           assert.equal(calls.length, candidates.length * efforts.length, 'every pair was tried once: ' + calls.length)
-          assert.equal(error.attempts.length, calls.length + (routes.length - candidates.length), 'attempts list every skip and every failure')
+          assert.equal(error.attempts.length, calls.length + (uniqueRoutes - candidates.length), 'attempts list every unique skip and every failure')
           assert.match(error.message, new RegExp(efforts.join('\|')))
           return true
         },

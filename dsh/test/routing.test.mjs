@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { effortCandidates, modelFamily, ReviewUnavailableError, selectReviewerRoute } from '../routing.mjs'
+import { candidateRoutes, effortCandidates, modelFamily, ReviewUnavailableError, selectReviewerRoute } from '../routing.mjs'
 import { DEFAULT_ROUTES } from '../settings.mjs'
 
 /** A fake llm.resolveCallConfig over an explicit route table. */
@@ -132,6 +132,20 @@ test('only same-family routes means REVIEW_UNAVAILABLE, never a self-review', as
       return true
     },
   )
+})
+
+test('identical duplicate routes record one skip, not two (CI shrink, aris-2cs.10)', () => {
+  const routes = [{ provider: 'deepseek-official', model: 'air-spark-1.0' }, { provider: 'deepseek-official', model: 'air-spark-1.0' }]
+  const executor = { provider: 'gateway-x', model: 'team-chat' }
+  const calls = []
+  assert.rejects(selectReviewerRoute({ executor, requestedModel: undefined, requestedEffort: 'minimal', routes, resolve: async (route) => { calls.push(route); throw new Error('nope') } }), (error) => {
+    assert.ok(error instanceof ReviewUnavailableError)
+    const uniqueRoutes = new Set(routes.map(r => r.provider + '/' + r.model)).size
+    const { candidates } = candidateRoutes({ executorFamily: modelFamily(executor.model), requestedModel: undefined, routes })
+    assert.equal(error.attempts.length, calls.length + (uniqueRoutes - candidates.length), 'attempts: ' + JSON.stringify(error.attempts))
+    assert.equal(calls.length, 0, 'a dedup-to-nothing route list must not call resolve at all')
+    return true
+  })
 })
 
 test('an executor of unknown family is reviewed but marked unverified', async () => {

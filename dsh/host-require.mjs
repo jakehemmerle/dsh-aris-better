@@ -10,8 +10,16 @@
 
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
 
+/**
+ * DSH's own packages sit directly under its package root in the Nix layout
+ * (dsh/node_modules) and are hoisted one level up in an npm install; a
+ * require rooted at DSH_ROOT/package.json resolves through both layouts.
+ */
+const dshRootRequirers = process.env.DSH_ROOT === undefined ? [] : [createRequire(join(process.env.DSH_ROOT, 'package.json'))]
 const requirers = [
+  ...dshRootRequirers,
   ...process.argv[1] ? [createRequire(pathToFileURL(process.argv[1]))] : [],
   createRequire(import.meta.url),
 ]
