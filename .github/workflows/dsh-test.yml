@@ -1,0 +1,49 @@
+name: dsh plugin suites
+
+# The dsh/ plugin layer (aris-2cs.10): the fast dsh suites against the pinned
+# DSH release target, on both main and dsh-next — the pytest job above only
+# covers tests/python and its own path list (no dsh/**). The real-client e2e
+# suites (Playwright + dsh-TUI) need a desktop-class Chromium and run on the
+# dev host / flake apps.e2e, never here; aris-2cs.9 records their evidence.
+
+on:
+  push:
+    branches: [main, dsh-next]
+    paths:
+      - 'dsh/**'
+      - 'package.json'
+      - '.github/workflows/dsh-test.yml'
+  pull_request:
+    paths:
+      - 'dsh/**'
+      - 'package.json'
+      - '.github/workflows/dsh-test.yml'
+  workflow_dispatch:
+
+jobs:
+  fast-suite:
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: ['20261012', '1339444460']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: dsh/test/package-lock.json
+      - name: Install the pinned dsh (test target)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/dshpkg" "@deepseek-ai/dsh@0.2.1-alpha.2" --no-fund --no-audit
+          echo "DSH_BIN=$RUNNER_TEMP/dshpkg/node_modules/.bin/dsh" >> "$GITHUB_ENV"
+          echo "DSH_ROOT=$RUNNER_TEMP/dshpkg/node_modules/@deepseek-ai/dsh" >> "$GITHUB_ENV"
+      - name: Fast fast-check suite (seed ${{ matrix.seed }})
+        env:
+          FC_SEED: ${{ matrix.seed }}
+        run: |
+          cd dsh/test
+          npm ci
+          node --test $(ls *.test.mjs | grep -v -e '[.]e2e[.]test[.]mjs')

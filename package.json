@@ -43,7 +43,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test 'dsh/test/*.test.mjs'"
+    "test": "node --test $(ls dsh/test/*.test.mjs | grep -v -e '[.]e2e[.]test[.]mjs')"
   },
   "dsh": {
     "bundle": {
