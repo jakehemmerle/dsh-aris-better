@@ -2,62 +2,73 @@
 
 Effort epic: `aris-2cs` (3 rounds). Read this file and `bd ready` at the start of every round.
 
-## Round A (2026-10-12, "ROUND A") — DONE, reported to lead
+## Round C (2026-10-13, "ROUND C") — DONE, board complete
 
-Recovered the crashed turn's uncommitted work, then:
-
-- 2a878c4 "5.3 FLASH: rig acceptance: ARIS bundle composes aris-host + preset-aris and
-  nothing else (SPEC 6.1/6.3)" — finished the mid-write `dsh/test/acceptance-rig.test.mjs`
-  (the composed row name is a `file://` URL in dump-config, not a plain path), extracted the
-  shared bundle helpers to `dsh/test/support/aris-bundle.mjs`. Pushed (62c9e91..2a878c4).
-- 656ce59 aris-2cs.16: aris-host row disposal — 5 unit-seam tests (publish exactly
-  {settings, ARIS_REPO, run-status RPC}, withdraw exactly those, operator `ARIS_REPO` wins,
-  bad config fails before effects, re-apply after dispose) + real rig lifecycle (dsh web
-  boots with the bundle, stops cleanly, no ARIS error lines, profile tree fully removable).
-- 418034a aris-2cs.18: `/aris` run-status projection honesty — endpoints, empty workspace,
-  pass-through, malformed/array state errors verbatim, criticisms verbatim or absent,
-  artifact-presence fast-check property, newest-run selection.
-- 3147518 + f18fc26 aris-2cs.17: routing fast-check properties (13): family derivation
-  (pattern-per-family, not per-keyword), effort ladder exactness, candidate order/pins/
-  dedup/skips, purity, candidate-major × effort-minor selection (route preferred over
-  effort tier), fail-closed REVIEW_UNAVAILABLE with exact attempt accounting, maxTokens
-  pass-through. Seeds 20261012, 1339444460, 1665507952 all green.
-- SPEC §8 written (dsh/SPEC.md): P-01..P-14 with ID+oracle+surface, W-01..W-06 listed as
-  pending, §6 acceptance items mapped to IDs (closes aris-2cs.2 with the drift fixes from
-  6a7f3f7/62c9e91).
-- dsh/TESTING.md written (aris-2cs.7): full traceability property → test → surface →
-  result, seeds/versions, honest gaps (W-01..W-06, CI, release gate).
-- aris-2cs.8 mutation campaign: **caught 6/6** observable mutants planted one at a time
-  (max-effort regression, same-family guard deleted, loop order swapped, ARIS_REPO cleanup
-  dropped, routes validation deleted, guessed artifact existence); one equivalent mutant
-  recorded (deferred parse under the eager unit seam). The loop-order mutant survived
-  until the route-over-effort property was added — that red/green is f18fc26.
-- Beads closed with evidence: .11 (1b62452/3f5fe36), .12 (da84de3/f2e48b8), .13 (82a1317),
-  .14 (1c1b8bb), .15 (6a7f3f7/62c9e91), .2, .7, .8, .16, .17, .18. Still open: .3 (Nix env),
-  .5 (Playwright web), .6 (TUI inertness), .9 (release — HELD FOR ROUND B), .10 (CI), epic.
-- Full suite after everything: **56/56 green** (FC_SEED=20261012, ~2.3 s).
+- Closure audit: all 13 closes (.1,.2,.4,.7,.8,.11–.18) re-verified against
+  their recorded evidence: fast suite 58 → then 59 tests green on
+  FC_SEED=20261012 (the ±1 from wire-contract additions)
+  red→fix pairs re-reviewed in history (da84de3→f2e48b8, 1b62452→3f5fe36,
+  6a7f3f7→62c9e91); mutants M1 and M3 replanted and killed again by exactly
+  the recorded tests; SPEC §8 and TESTING.md tables checked line by line.
+- aris-2cs.5 W-01/W-02 were RED for a REAL bug: dsh 0.2.1-alpha.2 cannot mount
+  a plugin prefix RPC channel (`connection.rpc.handle` throws on the
+  connection service's `webServer` scope for patch rows — probed live with a
+  shape-matrix plugin). Red a677f20 → fix cf585d9: the host mounts
+  `POST /api/aris/state` as an exact fetch route on the shared `/api` gateway
+  and the client polls `connection.rpc.call('/api','aris/state',…)`. At
+  campaign scale two more finds: the ARIS sidebar seat shares the preset tab's
+  text (role=tab selectors), and the W-01 preset-reset oracle — a picked
+  preset applies to the session you start; New session resets to Standard
+  mode. Campaign green: 3 seeds × 40 cases × web 6 tests.
+- aris-2cs.6: same-scale finds — once a session exists the TUI home hands the
+  input to the sessions filter, so the property RESTARTS the client on the
+  same profile per run (rig restart persistence); Escape/C-u semantics
+  probed and pinned. 3 seeds × 40 cases × TUI 3 tests green.
+- aris-2cs.10: `.github/workflows/dsh-test.yml` (fast suite, dsh/** paths on
+  main + dsh-next, seed matrix) — the first CI run caught a LIVE bug the
+  local suite misses: host-require resolved @deepseek-ai/* only through the
+  Nix nested node_modules (npm hoists one level up) and the P-07 attempt
+  oracle miscounted dedup skips; CI-opened fixes 4fa7c00, run 38336334099
+  green on both seeds afterwards.
+- aris-2cs.3: flake.nix (package/version from package.json, devShell with
+  pinned dsh 0.2.1-alpha.2 + dsh-TUI 0.14.0 + chromium-1243 browsers,
+  checks.fast-suite, apps.e2e): `nix flake check` green; fixing the flake's
+  own scale bugs along the way (jq --argjson JSON string, npmDepsHash cycle
+  to r/+rfdx…, e2eHome SC2155). The flake e2e app program runs green 9/9
+  (direct exec; `nix run`'s launcher EACCESes the identical built program on
+  this host — recorded in TESTING.md).
+- aris-2cs.9: RELEASING.md + CHANGELOG.md; tag v0.2.0-alpha.2 only when
+  every gate is green (flake check, CI, campaigns) — done.
+- Beads closed with evidence: .3, .5, .6, .10, .9 + epic. `bd export`
+  committed; every push to origin/main verified with the preflight script.
 
 ## Environment for running suites
 
-- DSH_BIN=/nix/store/i24c2k38bz3h86r0v7bjr4amk7d4vxrj-dsh-0.2.1-alpha.2/bin/dsh (NOT the
-  managed wrapper — it exports real provider keys), DSH_ROOT=…/lib/node_modules/@deepseek-ai/dsh.
-- Node v24.21.0; fast-check 4.10.2 in dsh/test/node_modules (gitignored; package-lock.json
-  is the committed source of the test-only deps).
+- DSH_BIN=/nix/store/i24c2k38bz3h86r0v7bjr4amk7d4vxrj-dsh-0.2.1-alpha.2/bin/dsh
+  (NOT the managed wrapper — it exports real provider keys),
+  DSH_ROOT=…/lib/node_modules/@deepseek-ai/dsh.
+- Node v24.21.0; fast-check 4.10.2, playwright-core 1.63.0 in dsh/test/node_modules
+  (gitignored; package-lock.json is the committed source).
+- Real-client browser: PLAYWRIGHT_BROWSERS_PATH=/tmp/pw-browsers
+  (`nix build github:NixOS/nixpkgs/b6c8664…#playwright-driver.browsers` → chromium-1243).
 
-## Gotchas
+## Gotchas (new this round)
 
-- `dump-config` reports module paths as `file://` URLs even when the patch names plain paths.
-- `modelFamily` is a boolean per family pattern, not a keyword counter: `doubao-bytedance`
-  is bytedance, `claude-gpt` is unknown (single shared boundary is consumed by the first
-  match — same re semantics as tools/review_gate.py).
-- `bd create`/`update` here do not auto-commit (hooks unwired); commit the
-  `.beads/` export deliberately.
-- The test `support/` path is 3 levels under the repo root, not 2.
+- `dump-config` reports module paths as `file://` URLs (see acceptance-rig).
+- In the ARIS web UI, the session sidebar seat and the ARIS conversation tab
+  share the text 'ARIS'; use role=tab.
+- The dsh-TUI home screen routes typing to the sessions filter once a
+  session exists; Escape from chat returns (verified), Escape on the home
+  opens the transverse Sessions screen.
+- dsh web cannot mount plugin prefix RPC channels in 0.2.1-alpha.2; mount
+  exact `/api/*` fetch routes instead.
+- fast-check examples that compare counts must derive skipped routes from a
+  UNIQUE-route view — candidateRoutes dedups before it labels.
+- bd create/update here do not auto-commit; commit `.beads/` deliberately.
 
-## Round B plan
+## Next (for a future round, none pending in-scope)
 
-- aris-2cs.3 Nix environment (flake.nix: package, devShell, checks, e2e app).
-- aris-2cs.5 Playwright property suites over real dsh web (picker, ARIS tab, reviewer tools).
-- aris-2cs.6 dsh-TUI inertness. aris-2cs.10 CI job for dsh/.
-- aris-2cs.9 RELEASING.md + CHANGELOG.md; cut the release **only if** all required suites
-  are green on the release target.
+- nix-config pins this tag after Jake's acceptance of the installed
+  revision (the lead's table, not this repo).
+- Optional follow-ups recorded as open beads elsewhere: theme/gesture
+  variation properties; `nix run` launcher EACCES investigation.
