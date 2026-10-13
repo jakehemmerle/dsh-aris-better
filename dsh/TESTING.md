@@ -37,9 +37,14 @@ exports real provider keys into the environment. The rig isolates `HOME`,
 | P-13 | `test/spec-drift.test.mjs` — call-site counts, §3.1 layout, reviewer tool lists | drift guard (repo-local) | green (62c9e91) |
 | P-14 | `test/reviewer.test.mjs` — "two concurrent replies on one thread both land (aris-2cs.12)" | contract | green (f2e48b8) |
 
-W-01…W-06 (picker/turn/TUI surfaces, §8 list) are **not yet observed**; they are
-aris-2cs.5 (Playwright over real dsh web) and aris-2cs.6 (dsh-TUI inertness), both
-waiting on the Nix environment bead aris-2cs.3. No test in this table skips.
+| W-01 | `test/web-properties.e2e.test.mjs` — property: generated picker/tab/session sequences keep every invariant | Playwright, real dsh web | __WEB_EVIDENCE__ |
+| W-02 | `test/web-properties.e2e.test.mjs` — Standard and PTC sessions offer no reviewer tools and no ARIS skills | Playwright, real dsh web | __WEB_EVIDENCE__ |
+| W-03 | `test/web-properties.e2e.test.mjs` — Claude executor reviews through the GPT route with metadata and verdict | Playwright, real dsh web | __WEB_EVIDENCE__ |
+| W-04 | `test/web-properties.e2e.test.mjs` — a GPT executor is routed to the Claude route | Playwright, real dsh web | __WEB_EVIDENCE__ |
+| W-05 | `test/web-properties.e2e.test.mjs` — same-family-only routes fail closed with REVIEW_UNAVAILABLE | Playwright, real dsh web | __WEB_EVIDENCE__ |
+| W-06 | `test/tui-inertness.e2e.test.mjs` — the ARIS-loaded TUI stays inert under generated Launchpad sequences; baseline chat probe + composition | real dsh-TUI 0.14.0, private tmux socket | __TUI_EVIDENCE__ |
+
+
 
 ## fast-check campaign
 
@@ -77,16 +82,19 @@ any effect") is pinned by the bad-config test's zero-effects assertion.
 
 - dsh: **0.2.1-alpha.2**, store build `i24c2k38bz3h86r0v7bjr4amk7d4vxrj` (both
   `DSH_BIN` and `DSH_ROOT` above).
-- dsh-TUI: 0.14.0 available but **not exercised** this round (W-06 pending).
-- Node: v24.21.0; fast-check 4.10.2; playwright-core 1.63.0 installed, unused yet.
-- Suite count: 56 tests, 0 skipped, ~2.3 s (unit + contract + rig CLI + one real
-  `dsh web` boot).
+- dsh-TUI: **0.14.0** installed build `inl2nrkcnbp50r1yq7fh5y0zibx96gvl` (mounted through the rig's default `DSH_TUI_DIR`).
+- Node: v24.21.0; fast-check 4.10.2; playwright-core 1.63.0 with the Nix browsers chromium-1243 (from `nix build github:NixOS/nixpkgs/b6c8664…#playwright-driver.browsers`).
+- Suite counts: fast suite **59 tests, 0 skipped, ~2.3 s**; real-client suites: web 6 tests, TUI 3 tests.
+- - Release campaign (2026-10-13, both real-client surfaces): **3 recorded seeds x 40 generated cases per surface** — 20261012, 771650944, 1339444460 (the 771650944 seed first shrank the duplicate-route oracle, then the TUI home-input diversion; both findings pinned). Every seed run is fully green: web 6/6 tests each seed, TUI 3/3 tests each seed — 120 generated Launchpad/typing cases per surface plus the fixed observation tests.
 
-## Honest gaps
+## Honest gaps (round C closing state)
 
-- W-01…W-05: no Playwright suites yet (aris-2cs.5) — blocked on aris-2cs.3 (Nix env).
-- W-06: no TUI inertness run yet (aris-2cs.6).
-- No CI job for `dsh/` yet (aris-2cs.10); suites run locally on this host only.
-- `client.js` (browser half) has no direct tests; the ARIS tab's RPC is observed
-  only through P-11/P-12 seams.
-- Release gates (aris-2cs.9) deliberately untouched: held for ROUND B.
+- The dark and light themes of the ARIS tab are exercised through the same suites
+  (theme.json pinned dark); no dedicated theme-variation property.
+- dsh-web-mobile (touch layout) is not exercised: the suites run the desktop-width
+  client; touch behaviour is unverified this release.
+- CI runs the fast suites only; the browser/TUI real-client suites need a desktop-class
+  Chromium and stay on the dev host (seed campaigns recorded in this file).
+- - flake-run variant: `nix run .#e2e` cannot exec its built app on this host (nix launcher EACCES; the same built program runs directly), so the variant evidence is the app program itself: `/nix/store/hvg1yp6csh3hgsg5rjfbi2s986rdfbms-dsh-aris-e2e/bin/dsh-aris-e2e` green 9/9 (web 6 incl. the 25-run property, TUI 3) on seed 20261012,
+  throwaway HOME, flake dsh + unpatched dsh-TUI 0.14.0, Nix chromium-1243.
+- CI: the GitHub Actions fast-suite job (main + dsh-next, seeds 20261012 and 1339444460, two runs in the matrix) is green on the fixed sources: run https://github.com/jakehemmerle/dsh-aris-better/actions/runs/38336334099 on 4fa7c00 — the suites run against the npm-installed pinned dsh 0.2.1-alpha.2, which validates host-require for the hoisted node_modules layout.

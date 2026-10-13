@@ -52,15 +52,33 @@ async function chatProbe(tui, mock, prompt) {
 }
 
 /** One TUI scenario: mock, profile, optional bundle rows, live TUI. */
-async function startTuiScenario(t, { name, bundle, script } = {}) {
+/**
+ * One TUI scenario: mock, profile, an optional bundle, and a live TUI.
+ * lazyTui scenarios build the TUI on demand (`restartTui()`), so the
+ * generated runs can restart the client on the same profile: sessions
+ * persist (read restart persistence in the rig docs) while the input
+ * focus is deterministic. Teardown always follows the CURRENT tui.
+ */
+async function startTuiScenario(t, { name, bundle, script, lazyTui } = {}) {
   const mock = await startMockLlm({ script })
   const p = makeProfile({ kind: 'tui', mock })
   if (bundle) appendFileSync(join(p.dir, 'cordis.patch.yml'), '\n' + arisPatch())
-  const tui = startTui(p)
-  t.after(async () => { await tui.kill(); await mock.close(); p.dispose() })
-  return { mock, profile: p, tui }
+  const state = { tui: undefined }
+  if (!lazyTui) state.tui = startTui(p)
+  t.after(async () => {
+    try { if (state.tui) await state.tui.kill() } catch { /* already gone */ }
+    try { await mock.close() } catch { /* closed */ }
+    try { p.dispose() } catch { /* disposed */ }
+  })
+  return {
+    mock, profile: p,
+    get tui() { return state.tui },
+    async restartTui() {
+      if (state.tui) { try { await state.tui.kill() } catch { /* gone */ } }
+      state.tui = startTui(p)
+    },
+  }
 }
-
 test('baseline: a TUI profile without the bundle types and chats normally', { timeout: 240000 }, async (t) => {
   const s = await startTuiScenario(t, { name: 'plain' })
   await s.tui.waitFor(/\S/, { timeout: 30000 }) // the TUI rendered something
@@ -75,27 +93,19 @@ test('baseline: a TUI profile without the bundle types and chats normally', { ti
 })
 
 test('property: the ARIS-loaded TUI stays inert under generated key sequences (W-06)', { timeout: 600000 }, async (t) => {
-  const s = await startTuiScenario(t, { name: 'aris-tui', bundle: true })
-  await s.tui.waitFor(/\S/, { timeout: 30000 })
-  await sleep(600) // historical first-input drop: settle once the frame exists
-
+  const s = await startTuiScenario(t, { name: 'aris-tui', bundle: true, lazyTui: true })
   const words = fc.array(fc.constantFrom('aris', 'inert', 'loop', 'review', 'probe', 'tab'), { minLength: 1, maxLength: 3 })
   const edits = fc.array(fc.constantFrom('BSpace', 'C-u'), { maxLength: 2 })
-
-  let chatActive = false
+  let submitted = 0
   await fc.assert(
     fc.asyncProperty(words, edits, fc.boolean(), async (words, edits, submit) => {
-      // Only Escape BACK from a submitted chat (verified probe: Escape on the
-      // Launchpad itself opens the transverse Sessions screen, not a reset).
-      if (chatActive) {
-        await s.tui.keys('Escape')
-        await sleep(400)
-        chatActive = false
-      }
-      // Start each run from a clean Launchpad prompt so the echo probe sees
-      // exactly this run's words.
-      await s.tui.keys('C-u')
-      await sleep(200)
+      // A fresh TUI per run on the SAME profile: sessions persist (rig restart
+      // persistence), so state carries while the input focus stays
+      // deterministic — the home screen hands typing to the sessions filter
+      // once a session exists, so in-place escape reuse races into limbo.
+      await s.restartTui()
+      await s.tui.waitFor(/\S/, { timeout: 30000 })
+      await sleep(600) // historical first-input drop: settle once the frame exists
       const echoes = await launchpadSequence(s.tui, words)
       assert.ok(echoes.every(Boolean), 'typed words echo with the bundle loaded: ' + JSON.stringify({ words, echoes }))
       for (const edit of edits) {
@@ -106,8 +116,8 @@ test('property: the ARIS-loaded TUI stays inert under generated key sequences (W
       if (submit) {
         const tail = words.at(-1)
         await sleep(250)
-        await s.tui.submit(tail, { until: () => s.mock.turns().length > 0 })
-        chatActive = true
+        await s.tui.submit(tail, { until: () => s.mock.turns().length > submitted })
+        submitted = s.mock.turns().length
         await s.tui.waitFor(/pong from mock-alpha/, { timeout: 30000 })
         assert.doesNotMatch(s.tui.capture(), CRASH)
       }
@@ -115,7 +125,10 @@ test('property: the ARIS-loaded TUI stays inert under generated key sequences (W
     { seed: SEED, numRuns: NUM_RUNS },
   )
 
-  // The chat surface with the bundle: same model, same reply as the baseline.
+  // Chat with the bundle, from a fresh Launchpad exactly like the baseline.
+  await s.restartTui()
+  await s.tui.waitFor(/\S/, { timeout: 30000 })
+  await sleep(600)
   const { turns } = await chatProbe(s.tui, s.mock, 'aris inertness chat probe')
   assert.ok(turns >= 1, 'chat works with the bundle loaded')
   assert.ok(s.mock.turns().every(r => r.model === 'mock-alpha'), 'the mock default model serves every turn')
@@ -124,7 +137,6 @@ test('property: the ARIS-loaded TUI stays inert under generated key sequences (W
   const logs = s.profile.logs()
   assert.ok(!/aris.*(error|failed)|failed.*aris/i.test(logs), 'no ARIS errors in dsh logs: ' + logs.slice(-400))
 })
-
 test('the TUI profile with the bundle still composes aris-host and preset-aris', { timeout: 120000 }, async (t) => {
   const s = await startTuiScenario(t, { name: 'aris-tui-compose', bundle: true })
   const dump = await s.profile.dumpConfig()

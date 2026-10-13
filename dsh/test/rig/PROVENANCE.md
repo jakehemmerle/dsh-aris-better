@@ -19,3 +19,7 @@ Local changes (keep this list complete when re-vendoring):
 
 1. `rig.mjs` `startTui`: tmux runs with `-f /dev/null` as well as a private
    `-L` socket, so no user `~/.tmux.conf` is read.
+2. `rig.mjs` `makeProfile`: `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and
+   `XDG_CACHE_HOME` are pinned inside the throwaway home and
+   `DBUS_SESSION_BUS_ADDRESS` is dropped, so xdg-user-dir (Documents →
+   default workspace) and similar lookups can never reach outside the rig.

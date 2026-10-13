@@ -100,6 +100,15 @@ export function makeProfile({ kind = 'web', mock, plugins = [], rows = [], bundl
   }
   writeFileSync(join(dir, 'cordis.patch.yml'), patch);
   const env = { ...process.env, HOME: home, DSH_HOME: dshHome, MOCK_KEY: 'mock', DSH_TELEMETRY_DISABLED: '1' };
+  // XDG dirs follow the throwaway home (local change 2): a desktop session's
+  // XDG_CONFIG_HOME would otherwise lead xdg-user-dir (and anything else)
+  // back to the real user home — the default Documents-derived workspace
+  // must land inside the rig, never outside it.
+  for (const dir of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME']) {
+    env[dir] = join(home, dir.slice(4).toLowerCase().replace('_', '-'))
+    mkdirSync(env[dir], { recursive: true })
+  }
+  delete env.DBUS_SESSION_BUS_ADDRESS;
   return {
     kind, root, home, dshHome, name, dir, work, env, bin: where.bin,
     /** Every dsh log line written so far (warnings about plugin load failures land here). */

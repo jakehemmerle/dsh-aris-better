@@ -139,7 +139,7 @@ export async function submitPrompt(page, text, { timeout = 60000 } = {}) {
 /** The conversation tabs every session carries; ARIS is the plugin tab. */
 export async function assertConversationTabs(page) {
   for (const label of ['Chat', 'Trajectory', 'ARIS']) {
-    const tab = page.getByText(label, { exact: true }).first()
+    const tab = page.getByRole('tab', { name: label }).first()
     assert.ok(await tab.isVisible({ timeout: 8000 }).catch(() => false), 'conversation tab visible: ' + label)
   }
   await assertNoErrors(page)
@@ -147,10 +147,16 @@ export async function assertConversationTabs(page) {
 
 /** Open the ARIS tab; the view must render one of its honest states. */
 export async function openArisTab(page) {
-  await page.getByText('ARIS', { exact: true }).first().click({ timeout: 8000 })
+  await page.getByRole('tab', { name: 'ARIS' }).click({ timeout: 8000 })
   const view = page.locator('.aris-view').first()
-  assert.ok(await view.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false),
-    'ARIS tab renders its view')
+  const visible = await view.waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false)
+  if (!visible) {
+    mkdirSync(ARTIFACTS, { recursive: true })
+    const stamp = join(ARTIFACTS, 'aristab-' + Date.now())
+    await page.screenshot({ path: stamp + '.png', fullPage: true }).catch(() => {})
+    writeFileSync(stamp + '.txt', await page.evaluate(() => document.body.innerText).catch(() => ''))
+  }
+  assert.ok(visible, 'ARIS tab renders its view')
   const text = await view.textContent()
   assert.match(text, /Reading run artifacts|This session has no workspace|No review-stage\/REVIEW_STATE\.json yet|Reviewer independence|Artifacts/,
     'ARIS tab shows a known honest state, got: ' + text.slice(0, 200))
@@ -160,7 +166,7 @@ export async function openArisTab(page) {
 
 /** Back to Chat; the transcript is still there. */
 export async function openChatTab(page, expectText) {
-  await page.getByText('Chat', { exact: true }).first().click({ timeout: 8000 })
+  await page.getByRole('tab', { name: 'Chat' }).click({ timeout: 8000 })
   await sleep(400)
   if (expectText) {
     assert.ok(await page.getByText(expectText).first().isVisible({ timeout: 8000 }).catch(() => false),
