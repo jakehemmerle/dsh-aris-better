@@ -62,3 +62,10 @@ pnpm-lock.yaml
 
 # Test-only lock for dsh/test (the Nix checks build node_modules from it)
 !dsh/test/package-lock.json
+
+# Nix build out-links (flake checks / apps.e2e)
+result
+result-*
+
+# Playwright failure artifacts from the real-client suites
+dsh/test/artifacts/
